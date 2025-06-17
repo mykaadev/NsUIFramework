@@ -87,10 +87,6 @@ public:
 // Variables
 private:
 
-    /** Widget used to visualize which element currently has focus */
-    UPROPERTY(EditAnywhere, Category="Cursor")
-    TSoftClassPtr<class UNsUICursor> CursorWidgetClass;
-
     /** Instance of the cursor widget */
     UPROPERTY()
     TObjectPtr<class UNsUICursor> CursorWidget;

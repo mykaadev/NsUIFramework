@@ -9,6 +9,7 @@
 #include "NsUICursor.h"
 #include "NsUILayout.h"
 #include "NsUILibrary.h"
+#include "NsUISettings.h"
 
 UNsUISubsystem::UNsUISubsystem()
 {
@@ -20,12 +21,12 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     InitializeCommandRegistry();
 
-    if (CursorWidgetClass != nullptr)
+    if (const UNsUISettings* const Settings = UNsUISettings::GetSettings())
     {
-        if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+        if (UWorld* const World = GetWorld())
         {
-            CursorWidget = CreateWidget<UNsUICursor>(PC, CursorWidgetClass.LoadSynchronous());
-            if (CursorWidget)
+            CursorWidget = CreateWidget<UNsUICursor>(World, Settings->CursorWidgetClass.LoadSynchronous());
+            if (CursorWidget != nullptr)
             {
                 CursorWidget->AddToViewport();
                 CursorWidget->SetVisibility(ESlateVisibility::Hidden);
@@ -36,7 +37,7 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UNsUISubsystem::Deinitialize()
 {
-    if (CursorWidget)
+    if (CursorWidget != nullptr)
     {
         CursorWidget->RemoveFromParent();
         CursorWidget = nullptr;
@@ -197,7 +198,7 @@ void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
         InNewFocus->SetUserFocus(InNewFocus->GetOwningPlayer());
         InNewFocus->SetKeyboardFocus();
 
-        if (CursorWidget)
+        if (CursorWidget != nullptr)
         {
             CursorWidget->MoveToWidget(InNewFocus);
         }
@@ -206,7 +207,7 @@ void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
     {
         CurrentFocusedWidget = nullptr;
 
-        if (CursorWidget)
+        if (CursorWidget != nullptr)
         {
             CursorWidget->MoveToWidget(nullptr);
         }
