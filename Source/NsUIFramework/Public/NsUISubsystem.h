@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "NsUICursor.h"
 #include "NsUISubsystem.generated.h"
 
 /** A little alias for readability */
@@ -85,6 +86,14 @@ public:
 
 // Variables
 private:
+
+    /** Widget used to visualize which element currently has focus */
+    UPROPERTY(EditAnywhere, Category="Cursor")
+    TSoftClassPtr<class UNsUICursor> CursorWidgetClass;
+
+    /** Instance of the cursor widget */
+    UPROPERTY()
+    TObjectPtr<class UNsUICursor> CursorWidget;
 
     /** Active UI layout */
     UPROPERTY(VisibleDefaultsOnly)

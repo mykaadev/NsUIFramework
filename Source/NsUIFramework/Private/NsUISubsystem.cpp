@@ -6,6 +6,7 @@
 #include "Components/Slider.h"
 #include "INsUINavigation.h"
 #include "Kismet/GameplayStatics.h"
+#include "NsUICursor.h"
 #include "NsUILayout.h"
 #include "NsUILibrary.h"
 
@@ -18,10 +19,29 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
     Super::Initialize(Collection);
 
     InitializeCommandRegistry();
+
+    if (CursorWidgetClass != nullptr)
+    {
+        if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+        {
+            CursorWidget = CreateWidget<UNsUICursor>(PC, CursorWidgetClass.LoadSynchronous());
+            if (CursorWidget)
+            {
+                CursorWidget->AddToViewport();
+                CursorWidget->SetVisibility(ESlateVisibility::Hidden);
+            }
+        }
+    }
 }
 
 void UNsUISubsystem::Deinitialize()
 {
+    if (CursorWidget)
+    {
+        CursorWidget->RemoveFromParent();
+        CursorWidget = nullptr;
+    }
+
     Super::Deinitialize();
 }
 
@@ -176,10 +196,20 @@ void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
         // Actually request keyboard focus for that widget:
         InNewFocus->SetUserFocus(InNewFocus->GetOwningPlayer());
         InNewFocus->SetKeyboardFocus();
+
+        if (CursorWidget)
+        {
+            CursorWidget->MoveToWidget(InNewFocus);
+        }
     }
     else
     {
         CurrentFocusedWidget = nullptr;
+
+        if (CursorWidget)
+        {
+            CursorWidget->MoveToWidget(nullptr);
+        }
     }
 
     UE_LOG(LogTemp, Warning, TEXT("Previous Focus: %s, New Focus: %s")
