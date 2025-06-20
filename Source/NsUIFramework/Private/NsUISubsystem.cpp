@@ -21,19 +21,10 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     InitializeCommandRegistry();
 
-    if (const UNsUISettings* const Settings = UNsUISettings::GetSettings())
-    {
-        if (UWorld* const World = GetWorld())
-        {
-            CursorWidget = CreateWidget<UNsUICursor>(World, Settings->CursorWidgetClass.LoadSynchronous());
-            if (CursorWidget != nullptr)
-            {
-                CursorWidget->AddToViewport();
-                CursorWidget->SetVisibility(ESlateVisibility::Hidden);
-            }
-        }
-    }
+    //OnPossessedPawnChanged =
+    TrySpawnCursorWidget();
 }
+
 
 void UNsUISubsystem::Deinitialize()
 {
@@ -70,6 +61,28 @@ UNsUISubsystem* UNsUISubsystem::GetSubsystem()
     }
 
     return ToReturn;
+}
+
+void UNsUISubsystem::TrySpawnCursorWidget()
+{
+    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+    if (PC && PC->IsLocalController())
+    {
+        const UNsUISettings* Settings = UNsUISettings::GetSettings();
+        if (!ensure(Settings) || !Settings->CursorWidgetClass.IsValid()) { return; }
+
+        CursorWidget = CreateWidget<UNsUICursor>(PC, Settings->CursorWidgetClass.Get());
+        if (CursorWidget)
+        {
+            CursorWidget->AddToViewport(INT_MAX);
+            CursorWidget->SetVisibility(ESlateVisibility::Hidden);
+        }
+    }
+
+    if (CursorWidget == nullptr)
+    {
+        GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UNsUISubsystem::TrySpawnCursorWidget);
+    }
 }
 
 UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType)
