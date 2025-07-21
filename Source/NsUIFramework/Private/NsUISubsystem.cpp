@@ -69,9 +69,12 @@ void UNsUISubsystem::TrySpawnCursorWidget()
     if (PC && PC->IsLocalController())
     {
         const UNsUISettings* Settings = UNsUISettings::GetSettings();
-        if (!ensure(Settings) || !Settings->CursorWidgetClass.IsValid()) { return; }
+        if (Settings == nullptr || !Settings->CursorWidgetClass.IsValid())
+        {
+            return;
+        }
 
-        CursorWidget = CreateWidget<UNsUICursor>(PC, Settings->CursorWidgetClass.Get());
+        CursorWidget = CreateWidget<UNsUICursor>(PC, Settings->CursorWidgetClass.LoadSynchronous());
         if (CursorWidget)
         {
             CursorWidget->AddToViewport(INT_MAX);
