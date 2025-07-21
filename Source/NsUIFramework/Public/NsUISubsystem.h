@@ -33,9 +33,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     static UNsUISubsystem* GetSubsystem();
 
-    /** Try Spawn Cursor widget */
-    void TrySpawnCursorWidget();
-
     /** Push widget to layer */
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     class UUserWidget* PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
@@ -109,10 +106,4 @@ private:
 
     /** Map from widget class to what to do when HandleCancel() is pressed */
     TMap<UClass*, FWidgetCommand> CancelRegistry;
-
-// Events
-public:
-
-    /** On Possessed pawn */
-    FOnPossessedPawnChanged OnPossessedPawnChanged;
 };

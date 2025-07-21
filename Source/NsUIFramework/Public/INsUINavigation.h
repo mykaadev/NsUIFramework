@@ -10,7 +10,9 @@ class NSUIFRAMEWORK_API UNsUINavigation : public UInterface
     GENERATED_BODY()
 };
 
-/** UI Navigation Interface */
+/**
+ * UI Navigation Interface
+ */
 class NSUIFRAMEWORK_API INsUINavigation
 {
     GENERATED_BODY()
@@ -49,7 +51,7 @@ public:
     void HandleUICancel();
     virtual void HandleUICancel_Implementation() = 0;
 
-    /** Handle UI Cancel */
+    /** On Widget Pushed */
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
     void OnWidgetPushed();
     virtual void OnWidgetPushed_Implementation() = 0;

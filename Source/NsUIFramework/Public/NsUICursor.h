@@ -32,5 +32,10 @@ public:
     /** Local alignment of the cursor itself when positioned on screen. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cursor")
     FVector2D CursorAlignment;
+
+    /** Cursor Horizontal Padding. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cursor")
+    float HorizontalPadding;
+
 };
 

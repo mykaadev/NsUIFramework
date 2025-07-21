@@ -1,6 +1,8 @@
 // Copyright (C) 2024 mykaa. All rights reserved.
 
 #include "NsUISubsystem.h"
+
+#include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/EditableText.h"
 #include "Components/Slider.h"
@@ -20,11 +22,7 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
     Super::Initialize(Collection);
 
     InitializeCommandRegistry();
-
-    //OnPossessedPawnChanged =
-    TrySpawnCursorWidget();
 }
-
 
 void UNsUISubsystem::Deinitialize()
 {
@@ -61,32 +59,6 @@ UNsUISubsystem* UNsUISubsystem::GetSubsystem()
     }
 
     return ToReturn;
-}
-
-void UNsUISubsystem::TrySpawnCursorWidget()
-{
-    APlayerController* const PlayerController = UGameplayStatics::GetPlayerController(this, 0);
-    if (PlayerController != nullptr && PlayerController->IsLocalController())
-    {
-        const UNsUISettings* const Settings = UNsUISettings::GetSettings();
-        if (Settings->CursorWidgetClass.IsNull())
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load Cursor"));
-            return;
-        }
-
-        CursorWidget = CreateWidget<UNsUICursor>(PlayerController, Settings->CursorWidgetClass.LoadSynchronous());
-        if (CursorWidget != nullptr)
-        {
-            CursorWidget->AddToViewport(INT_MAX);
-            CursorWidget->SetVisibility(ESlateVisibility::Hidden);
-        }
-    }
-
-    if (CursorWidget == nullptr) // if it is too early to spawn we delay this
-    {
-        GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UNsUISubsystem::TrySpawnCursorWidget);
-    }
 }
 
 UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType)
@@ -143,6 +115,26 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& I
         {
             ActiveUILayout->SetOwningPlayer(LocalPlayerController);
             ActiveUILayout->AddToViewport();
+
+            if (const UNsUISettings* const Settings = UNsUISettings::GetSettings())
+            {
+                if (Settings->CursorWidgetClass.IsNull())
+                {
+                    UE_LOG(LogTemp, Error, TEXT("Failed to load Cursor"));
+                    return;
+                }
+
+                CursorWidget = CreateWidget<UNsUICursor>(LocalPlayerController, Settings->CursorWidgetClass.LoadSynchronous());
+                if (CursorWidget != nullptr && ActiveUILayout->WidgetTree != nullptr)
+                {
+                    if (UPanelWidget* const RootPanel = Cast<UPanelWidget>(ActiveUILayout->WidgetTree->RootWidget))
+                    {
+                        RootPanel->AddChild(CursorWidget);
+                        CursorWidget->SetVisibility(ESlateVisibility::Visible);
+
+                    }
+                }
+            }
         }
     }
 }
@@ -170,7 +162,7 @@ void UNsUISubsystem::InitializeCommandRegistry()
     // Clicked
     ConfirmRegistry.Add(UButton::StaticClass(),[](UWidget* Widget)
     {
-        if (auto Button = Cast<UButton>(Widget))
+        if (const UButton* const Button = Cast<UButton>(Widget))
         {
             Button->OnClicked.Broadcast();
             Button->OnPressed.Broadcast();
@@ -181,7 +173,7 @@ void UNsUISubsystem::InitializeCommandRegistry()
     // Confirm
     ConfirmRegistry.Add(USlider::StaticClass(), [](UWidget* Widget)
     {
-        if (auto Slider = Cast<USlider>(Widget))
+        if (USlider* const Slider = Cast<USlider>(Widget))
         {
             const float NewVal = FMath::Clamp(Slider->GetValue() + Slider->GetStepSize(), Slider->GetMinValue(), Slider->GetMaxValue());
             Slider->SetValue(NewVal);
@@ -193,7 +185,7 @@ void UNsUISubsystem::InitializeCommandRegistry()
     // Confirm
     ConfirmRegistry.Add(UEditableText::StaticClass(), [](UWidget* Widget)
     {
-        if (auto EditableText = Cast<UEditableText>(Widget))
+        if (const UEditableText* const EditableText = Cast<UEditableText>(Widget))
         {
             EditableText->OnTextCommitted.Broadcast(EditableText->GetText(), ETextCommit::OnEnter);
         }
@@ -217,7 +209,10 @@ void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
 
         if (CursorWidget != nullptr)
         {
-            CursorWidget->MoveToWidget(InNewFocus);
+            if (const UWorld* const World = GetWorld())
+            {
+                World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(CursorWidget, &UNsUICursor::MoveToWidget, InNewFocus));
+            }
         }
     }
     else

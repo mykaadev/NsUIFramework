@@ -1,10 +1,13 @@
 #include "NsUICursor.h"
+
+#include "Components/PanelWidget.h"
 #include "Widgets/SViewport.h"
 
 UNsUICursor::UNsUICursor(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
-    , TargetAnchor(FVector2D(0.0f, 0.25f))
-    , CursorAlignment(FVector2D(0.0f, 0.0f))
+    , TargetAnchor(FVector2D(0.0f, 0.5f))
+    , CursorAlignment(FVector2D(1.0f, 0.5f))
+    , HorizontalPadding(6.0f)
 {
 }
 
@@ -50,13 +53,14 @@ void UNsUICursor::MoveToWidget(UWidget* const InTarget)
     //    so we can translate absolute pixels into viewport-local pixels.
     //----------------------------------------------------------------------
     FVector2D ViewportPos = TargetAnchorPos;
-    if (GEngine != nullptr && GEngine->GameViewport)
+    if (GEngine && GEngine->GameViewport)
     {
         const TSharedPtr<SViewport> ViewportWidget = GEngine->GameViewport->GetGameViewportWidget();
-        const FGeometry ViewportGeo                = ViewportWidget->GetTickSpaceGeometry();
-
-        // Absolute → viewport-local
-        ViewportPos = ViewportGeo.AbsoluteToLocal(TargetAnchorPos);
+        if (ViewportWidget.IsValid())
+        {
+            const FGeometry ViewportGeo = ViewportWidget->GetCachedGeometry(); // safer than GetTickSpaceGeometry
+            ViewportPos = ViewportGeo.AbsoluteToLocal(TargetAnchorPos);
+        }
     }
 
     //----------------------------------------------------------------------
@@ -66,15 +70,36 @@ void UNsUICursor::MoveToWidget(UWidget* const InTarget)
     const FVector2D CursorSize = GetDesiredSize();
 
     //----------------------------------------------------------------------
-    // 5) Final position: left-align, vertically centered on the target
+    // 5) Apply & show
+    //    - If we're added directly to the viewport, use the viewport helpers
+    //    - Otherwise, move via render translation so we work as a panel child
     //----------------------------------------------------------------------
-    const FVector2D DesiredPos = ViewportPos - CursorSize * CursorAlignment;
+    if (IsInViewport())
+    {
+        const FVector2D DesiredPos = ViewportPos - CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
+        SetAlignmentInViewport(CursorAlignment);
+        SetPositionInViewport(DesiredPos, /*bRemoveDPIScale=*/false);
+        SetDesiredSizeInViewport(CursorSize);
+    }
+    else
+    {
+        FVector2D LocalPos = FVector2D::ZeroVector;
 
-    //----------------------------------------------------------------------
-    // 6) Apply & show
-    //----------------------------------------------------------------------
-    SetAlignmentInViewport(CursorAlignment);
-    SetPositionInViewport(DesiredPos, /*bRemoveDPIScale=*/true);
-    SetDesiredSizeInViewport(CursorSize);
+        if (UPanelWidget* const ParentWidget = GetParent())
+        {
+            ParentWidget->ForceLayoutPrepass();
+            const FGeometry ParentGeo = ParentWidget->GetCachedGeometry();
+
+            const FVector2D TargetAnchorAbs = TargetGeo.LocalToAbsolute(TargetGeo.GetLocalSize() * TargetAnchor);
+            const FVector2D LocalAnchor = ParentGeo.AbsoluteToLocal(TargetAnchorAbs);
+
+            const FVector2D CursorOffset = CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
+            LocalPos = LocalAnchor - CursorOffset;
+        }
+
+        SetRenderTransformPivot(CursorAlignment);
+        SetRenderTranslation(LocalPos);
+    }
+
     SetVisibility(ESlateVisibility::HitTestInvisible);
 }
