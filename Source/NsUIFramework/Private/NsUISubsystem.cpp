@@ -65,24 +65,25 @@ UNsUISubsystem* UNsUISubsystem::GetSubsystem()
 
 void UNsUISubsystem::TrySpawnCursorWidget()
 {
-    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-    if (PC && PC->IsLocalController())
+    APlayerController* const PlayerController = UGameplayStatics::GetPlayerController(this, 0);
+    if (PlayerController != nullptr && PlayerController->IsLocalController())
     {
-        const UNsUISettings* Settings = UNsUISettings::GetSettings();
-        if (Settings == nullptr || !Settings->CursorWidgetClass.IsValid())
+        const UNsUISettings* const Settings = UNsUISettings::GetSettings();
+        if (Settings->CursorWidgetClass.IsNull())
         {
+            UE_LOG(LogTemp, Error, TEXT("Failed to load Cursor"));
             return;
         }
 
-        CursorWidget = CreateWidget<UNsUICursor>(PC, Settings->CursorWidgetClass.LoadSynchronous());
-        if (CursorWidget)
+        CursorWidget = CreateWidget<UNsUICursor>(PlayerController, Settings->CursorWidgetClass.LoadSynchronous());
+        if (CursorWidget != nullptr)
         {
             CursorWidget->AddToViewport(INT_MAX);
             CursorWidget->SetVisibility(ESlateVisibility::Hidden);
         }
     }
 
-    if (CursorWidget == nullptr)
+    if (CursorWidget == nullptr) // if it is too early to spawn we delay this
     {
         GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UNsUISubsystem::TrySpawnCursorWidget);
     }

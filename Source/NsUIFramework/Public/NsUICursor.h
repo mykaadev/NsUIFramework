@@ -12,9 +12,25 @@ class NSUIFRAMEWORK_API UNsUICursor : public UUserWidget
 {
     GENERATED_BODY()
 
+// Functions
 public:
+
+    /** Constructor */
+    UNsUICursor(const FObjectInitializer& ObjectInitializer);
+
     /** Move the cursor so that it overlays the target widget. */
     UFUNCTION(BlueprintCallable, Category="Cursor")
-    void MoveToWidget(UWidget* InTarget);
+    void MoveToWidget(class UWidget* const InTarget);
+
+// Variables
+public:
+
+    /** Target point on the focused widget (0-1 normalized). (0,0)=top-left. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cursor")
+    FVector2D TargetAnchor;
+
+    /** Local alignment of the cursor itself when positioned on screen. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cursor")
+    FVector2D CursorAlignment;
 };
 
