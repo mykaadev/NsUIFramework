@@ -35,8 +35,10 @@ public:
 
     /**
      * Convenience helper to register actors for selection and bind callbacks.
-     * Projects each actor's bounds to screen space and registers them with the UI subsystem.
-     * The provided delegates are executed when an actor is confirmed, cancelled, or toggled.
+     * Clears any previously registered actors and delegate bindings, projects
+     * each actor's bounds to screen space and registers them with the UI
+     * subsystem. The provided delegates are executed when an actor is
+     * confirmed, cancelled, or toggled.
      */
     static void RegisterActorsForSelection(const TArray<AActor*>& Actors,
         const FNsUIActorDelegate::FDelegate& OnConfirm,

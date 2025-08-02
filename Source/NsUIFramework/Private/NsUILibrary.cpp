@@ -107,6 +107,12 @@ void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors,
 {
     if (UNsUISubsystem* const UISubsystem = UNsUISubsystem::GetSubsystem())
     {
+        // Reset any previous selection state
+        UISubsystem->ClearActorFocusTargets();
+        UISubsystem->OnActorConfirmed.Clear();
+        UISubsystem->OnActorCancelled.Clear();
+        UISubsystem->OnActorToggled.Clear();
+
         UWorld* World = UISubsystem->GetWorld();
         APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
         if (!PC)
