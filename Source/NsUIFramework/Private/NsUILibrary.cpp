@@ -5,6 +5,8 @@
 #include "INsUINavigation.h"
 #include "NsUILayout.h"
 #include "NsUISubsystem.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 
 UUserWidget* UNsUILibrary::AddWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType)
 {
@@ -94,6 +96,67 @@ void UNsUILibrary::GatherAllNavigableDescendants(const UUserWidget* const InRoot
         if (bSlateFocusable || bCustomNav)
         {
             InOutNavigables.Emplace(Widget);
+        }
+    }
+}
+
+void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors,
+    const FNsUIActorDelegate::FDelegate& OnConfirm,
+    const FNsUIActorDelegate::FDelegate& OnCancel,
+    const FNsUIActorDelegate::FDelegate& OnToggle)
+{
+    if (UNsUISubsystem* const UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UWorld* World = UISubsystem->GetWorld();
+        APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+        if (!PC)
+        {
+            return;
+        }
+
+        for (AActor* Actor : Actors)
+        {
+            if (!Actor)
+            {
+                continue;
+            }
+
+            const FBox Bounds = Actor->GetComponentsBoundingBox(true);
+            FVector Corners[8];
+            Bounds.GetCorners(Corners);
+
+            FVector2D Min(TNumericLimits<float>::Max(), TNumericLimits<float>::Max());
+            FVector2D Max(TNumericLimits<float>::Lowest(), TNumericLimits<float>::Lowest());
+
+            for (const FVector& Corner : Corners)
+            {
+                FVector2D ScreenPos;
+                if (PC->ProjectWorldLocationToScreen(Corner, ScreenPos))
+                {
+                    Min.X = FMath::Min(Min.X, ScreenPos.X);
+                    Min.Y = FMath::Min(Min.Y, ScreenPos.Y);
+                    Max.X = FMath::Max(Max.X, ScreenPos.X);
+                    Max.Y = FMath::Max(Max.Y, ScreenPos.Y);
+                }
+            }
+
+            if (Min.X <= Max.X && Min.Y <= Max.Y)
+            {
+                UISubsystem->RegisterActorFocus(Actor, FBox2D(Min, Max));
+            }
+        }
+
+        if (OnConfirm.IsBound())
+        {
+            UISubsystem->OnActorConfirmed.Add(OnConfirm);
+        }
+        if (OnCancel.IsBound())
+        {
+            UISubsystem->OnActorCancelled.Add(OnCancel);
+        }
+        if (OnToggle.IsBound())
+        {
+            UISubsystem->OnActorToggled.Add(OnToggle);
         }
     }
 }
