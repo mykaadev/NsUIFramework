@@ -137,7 +137,7 @@ void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors,
             for (const FVector& Corner : Corners)
             {
                 FVector2D ScreenPos;
-                if (PC->ProjectWorldLocationToScreen(Corner, ScreenPos))
+                if (PC->ProjectWorldLocationToScreen(Corner, ScreenPos, true))
                 {
                     Min.X = FMath::Min(Min.X, ScreenPos.X);
                     Min.Y = FMath::Min(Min.Y, ScreenPos.Y);

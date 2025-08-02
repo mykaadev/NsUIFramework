@@ -613,8 +613,8 @@ void UNsUISubsystem::Tick(float DeltaTime)
             {
                 const FBox Bounds = Actor->GetComponentsBoundingBox();
                 FVector2D Min, Max;
-                PC->ProjectWorldLocationToScreen(Bounds.Min, Min);
-                PC->ProjectWorldLocationToScreen(Bounds.Max, Max);
+                PC->ProjectWorldLocationToScreen(Bounds.Min, Min, true);
+                PC->ProjectWorldLocationToScreen(Bounds.Max, Max, true);
                 Info.ScreenBounds = FBox2D(Min, Max);
             }
         }

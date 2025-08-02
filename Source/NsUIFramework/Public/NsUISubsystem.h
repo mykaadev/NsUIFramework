@@ -17,6 +17,7 @@ class AActor;
 struct FNsUIActorFocusInfo
 {
     TWeakObjectPtr<AActor> Actor;
+    /** Actor's projected bounds in viewport pixel coordinates */
     FBox2D ScreenBounds;
 };
 

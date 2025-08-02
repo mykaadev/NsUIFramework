@@ -104,27 +104,27 @@ void UNsUICursor::MoveToWidget(UWidget* const InTarget)
     SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
-void UNsUICursor::MoveToScreenPosition(const FVector2D& InScreenPos)
+void UNsUICursor::MoveToScreenPosition(const FVector2D& InViewportPos)
 {
     // Ensure our own geometry is up to date
     ForceLayoutPrepass();
     const FVector2D CursorSize = GetDesiredSize();
 
-    // Translate absolute screen coordinates into viewport-local space
-    FVector2D ViewportPos = InScreenPos;
+    // Convert viewport coordinates to absolute for non-viewport parents
+    FVector2D AbsolutePos = InViewportPos;
     if (GEngine && GEngine->GameViewport)
     {
         const TSharedPtr<SViewport> ViewportWidget = GEngine->GameViewport->GetGameViewportWidget();
         if (ViewportWidget.IsValid())
         {
             const FGeometry ViewportGeo = ViewportWidget->GetCachedGeometry();
-            ViewportPos = ViewportGeo.AbsoluteToLocal(InScreenPos);
+            AbsolutePos = ViewportGeo.LocalToAbsolute(InViewportPos);
         }
     }
 
     if (IsInViewport())
     {
-        const FVector2D DesiredPos = ViewportPos - CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
+        const FVector2D DesiredPos = InViewportPos - CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
         SetAlignmentInViewport(CursorAlignment);
         SetPositionInViewport(DesiredPos, /*bRemoveDPIScale=*/false);
         SetDesiredSizeInViewport(CursorSize);
@@ -133,7 +133,7 @@ void UNsUICursor::MoveToScreenPosition(const FVector2D& InScreenPos)
     {
         ParentWidget->ForceLayoutPrepass();
         const FGeometry ParentGeo = ParentWidget->GetCachedGeometry();
-        const FVector2D LocalPos = ParentGeo.AbsoluteToLocal(InScreenPos) - CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
+        const FVector2D LocalPos = ParentGeo.AbsoluteToLocal(AbsolutePos) - CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
         SetRenderTransformPivot(CursorAlignment);
         SetRenderTranslation(LocalPos);
     }
