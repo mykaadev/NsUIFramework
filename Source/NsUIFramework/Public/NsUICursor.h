@@ -22,6 +22,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="Cursor")
     void MoveToWidget(class UWidget* const InTarget);
 
+    /** Move the cursor to an absolute screen-space position. */
+    UFUNCTION(BlueprintCallable, Category="Cursor")
+    void MoveToScreenPosition(const FVector2D& InViewportPos);
+
 // Variables
 public:
 
