@@ -24,7 +24,7 @@ public:
 
     /** Move the cursor to an absolute screen-space position. */
     UFUNCTION(BlueprintCallable, Category="Cursor")
-    void MoveToScreenPosition(const FVector2D& InViewportPos);
+    void MoveToScreenPosition(const FVector2D& InScreenPos);
 
 // Variables
 public:

@@ -12,6 +12,7 @@
 #include "NsUILayout.h"
 #include "NsUILibrary.h"
 #include "NsUISettings.h"
+#include "Stats/Stats.h"
 
 UNsUISubsystem::UNsUISubsystem()
     : CurrentActorIndex(INDEX_NONE)
@@ -595,4 +596,34 @@ int32 UNsUISubsystem::FindBestActorNeighborIndex(int32 CurrentIndex, EUINavigati
 FVector2D UNsUISubsystem::GetActorScreenCenter(const FNsUIActorFocusInfo& Info) const
 {
     return (Info.ScreenBounds.Min + Info.ScreenBounds.Max) * 0.5f;
+}
+
+void UNsUISubsystem::Tick(float DeltaTime)
+{
+    if (!bActorSelectionActive)
+    {
+        return;
+    }
+
+    if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+    {
+        for (FNsUIActorFocusInfo& Info : ActorFocusTargets)
+        {
+            if (AActor* Actor = Info.Actor.Get())
+            {
+                const FBox Bounds = Actor->GetComponentsBoundingBox();
+                FVector2D Min, Max;
+                PC->ProjectWorldLocationToScreen(Bounds.Min, Min);
+                PC->ProjectWorldLocationToScreen(Bounds.Max, Max);
+                Info.ScreenBounds = FBox2D(Min, Max);
+            }
+        }
+    }
+
+    UpdateActorCursor();
+}
+
+TStatId UNsUISubsystem::GetStatId() const
+{
+    RETURN_QUICK_DECLARE_CYCLE_STAT(UNsUISubsystem, STATGROUP_Tickables);
 }

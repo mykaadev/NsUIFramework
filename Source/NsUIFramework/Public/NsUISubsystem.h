@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "NsUICursor.h"
+#include "Tickable.h"
 #include "NsUISubsystem.generated.h"
 
 /** A little alias for readability */
@@ -26,7 +27,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FNsUIActorDelegate, AActor*);
  * Night Shift UI Subsystem
  */
 UCLASS()
-class NSUIFRAMEWORK_API UNsUISubsystem : public UGameInstanceSubsystem
+class NSUIFRAMEWORK_API UNsUISubsystem : public UGameInstanceSubsystem, public FTickableGameObject
 {
     GENERATED_BODY()
 
@@ -35,6 +36,12 @@ public:
 
     /** Constructor */
     UNsUISubsystem();
+
+    //~ Begin FTickableGameObject Interface
+    virtual void Tick(float DeltaTime) override;
+    virtual TStatId GetStatId() const override;
+    virtual bool IsTickable() const override { return bActorSelectionActive; }
+    //~ End FTickableGameObject Interface
 
     //~ Begin USubsystem Interface
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
