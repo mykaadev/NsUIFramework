@@ -249,10 +249,25 @@ void UNsUISubsystem::HandleNavigate(const FVector2D& Direction)
 
     if (bActorSelectionActive)
     {
-        const int32 NextIndex = FindBestActorNeighborIndex(CurrentActorIndex, NavEnum);
-        if (NextIndex != CurrentActorIndex)
+        const int32 TargetCount = ActorFocusTargets.Num();
+        if (TargetCount == 0)
         {
-            CurrentActorIndex = NextIndex;
+            return;
+        }
+
+        int32 Delta = 0;
+        if (NavEnum == EUINavigation::Left || NavEnum == EUINavigation::Up)
+        {
+            Delta = -1;
+        }
+        else if (NavEnum == EUINavigation::Right || NavEnum == EUINavigation::Down)
+        {
+            Delta = 1;
+        }
+
+        if (Delta != 0)
+        {
+            CurrentActorIndex = (CurrentActorIndex + Delta + TargetCount) % TargetCount;
             UpdateActorCursor();
         }
         return;
@@ -538,59 +553,6 @@ void UNsUISubsystem::UpdateActorCursor()
     {
         CursorWidget->MoveToWidget(nullptr);
     }
-}
-
-int32 UNsUISubsystem::FindBestActorNeighborIndex(int32 CurrentIndex, EUINavigation InNavDir) const
-{
-    if (!ActorFocusTargets.IsValidIndex(CurrentIndex))
-    {
-        return CurrentIndex;
-    }
-
-    const FVector2D CurrentCenter = GetActorScreenCenter(ActorFocusTargets[CurrentIndex]);
-    FVector2D DesiredDirection(0,0);
-    switch (InNavDir)
-    {
-        case EUINavigation::Up:    DesiredDirection = FVector2D(0, -1); break;
-        case EUINavigation::Down:  DesiredDirection = FVector2D(0,  1); break;
-        case EUINavigation::Left:  DesiredDirection = FVector2D(-1, 0); break;
-        case EUINavigation::Right: DesiredDirection = FVector2D(1,  0); break;
-        default: return CurrentIndex;
-    }
-
-    TArray<TPair<int32, FVector2D>> Candidates;
-    for (int32 i = 0; i < ActorFocusTargets.Num(); ++i)
-    {
-        if (i == CurrentIndex)
-        {
-            continue;
-        }
-        const FVector2D CandidateCenter = GetActorScreenCenter(ActorFocusTargets[i]);
-        const FVector2D Delta = CandidateCenter - CurrentCenter;
-        if (FVector2D::DotProduct(Delta, DesiredDirection) <= 0.f)
-        {
-            continue;
-        }
-        Candidates.Emplace(i, Delta);
-    }
-
-    if (Candidates.Num() == 0)
-    {
-        return CurrentIndex;
-    }
-
-    Candidates.Sort([&](auto& A, auto& B)
-    {
-        const float CosA = FVector2D::DotProduct(A.Value.GetSafeNormal(), DesiredDirection);
-        const float CosB = FVector2D::DotProduct(B.Value.GetSafeNormal(), DesiredDirection);
-        if (!FMath::IsNearlyEqual(CosA, CosB))
-        {
-            return CosA > CosB;
-        }
-        return A.Value.SizeSquared() < B.Value.SizeSquared();
-    });
-
-    return Candidates[0].Key;
 }
 
 FVector2D UNsUISubsystem::GetActorScreenCenter(const FNsUIActorFocusInfo& Info) const

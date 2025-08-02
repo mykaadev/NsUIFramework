@@ -166,9 +166,6 @@ private:
     /** Whether we are in actor-selection mode */
     bool bActorSelectionActive;
 
-    /** Find best actor neighbor based on screen-space bounds */
-    int32 FindBestActorNeighborIndex(int32 CurrentIndex, EUINavigation InNavDir) const;
-
     /** Get center of actor's screen-space bounds */
     FVector2D GetActorScreenCenter(const FNsUIActorFocusInfo& Info) const;
 };
