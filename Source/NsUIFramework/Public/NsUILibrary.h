@@ -37,8 +37,13 @@ public:
      * Convenience helper to register actors for selection and bind callbacks.
      * Clears any previously registered actors and delegate bindings, projects
      * each actor's bounds to screen space and registers them with the UI
-     * subsystem. The provided delegates are executed when an actor is
-     * confirmed, cancelled, or toggled.
+     * subsystem.
+     *
+     * @param Actors     Actors that should become selectable.
+     * @param OnConfirm  Required delegate executed when the focused actor is confirmed.
+     * @param OnCancel   Optional delegate executed when selection is cancelled.
+     * @param OnToggle   Optional delegate executed when the current actor is toggled.
+     *                  Leave unbound if you do not need multi-selection support.
      */
     static void RegisterActorsForSelection(const TArray<AActor*>& Actors,
         const FNsUIActorDelegate::FDelegate& OnConfirm,
