@@ -166,6 +166,9 @@ private:
     /** Whether we are in actor-selection mode */
     bool bActorSelectionActive;
 
+    /** Find the next actor relative to current one based on navigation direction */
+    int32 FindBestActorBySpatialSearch(int32 CurrentIndex, EUINavigation NavDir) const;
+
     /** Get center of actor's screen-space bounds */
     FVector2D GetActorScreenCenter(const FNsUIActorFocusInfo& Info) const;
 };
