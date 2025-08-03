@@ -8,6 +8,7 @@
 #include "Components/Slider.h"
 #include "INsUINavigation.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
 #include "NsUICursor.h"
 #include "NsUILayout.h"
 #include "NsUILibrary.h"
@@ -459,20 +460,31 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
         return CurrentIndex;
     }
 
-    const FVector2D CurrentCenter = GetActorScreenCenter(ActorFocusTargets[CurrentIndex]);
+    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+    const AActor* CurrentActor = ActorFocusTargets[CurrentIndex].Actor.Get();
+    if (PC == nullptr || CurrentActor == nullptr)
+    {
+        return CurrentIndex;
+    }
 
-    FVector2D DesiredDirection(0, 0);
+    FVector ViewLoc;
+    FRotator ViewRot;
+    PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+
+    FVector2D DesiredDirection(0.f, 0.f);
     switch (InNavDir)
     {
-        case EUINavigation::Up:    DesiredDirection = FVector2D(0, -1); break;
-        case EUINavigation::Down:  DesiredDirection = FVector2D(0,  1); break;
-        case EUINavigation::Left:  DesiredDirection = FVector2D(-1, 0); break;
-        case EUINavigation::Right: DesiredDirection = FVector2D(1,  0); break;
+        case EUINavigation::Up:    DesiredDirection = FVector2D(0.f, -1.f); break;
+        case EUINavigation::Down:  DesiredDirection = FVector2D(0.f,  1.f); break;
+        case EUINavigation::Left:  DesiredDirection = FVector2D(-1.f, 0.f); break;
+        case EUINavigation::Right: DesiredDirection = FVector2D(1.f,  0.f); break;
         default: return CurrentIndex;
     }
 
-    TArray<TPair<int32, FVector2D>> ValidCandidates;
-    ValidCandidates.Reserve(ActorFocusTargets.Num() - 1);
+    TArray<TPair<int32, FVector2D>> Candidates;
+    Candidates.Reserve(ActorFocusTargets.Num() - 1);
+
+    const FVector CurrentLocation = CurrentActor->GetActorLocation();
 
     for (int32 i = 0; i < ActorFocusTargets.Num(); ++i)
     {
@@ -481,23 +493,31 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
             continue;
         }
 
-        const FVector2D CandidateCenter = GetActorScreenCenter(ActorFocusTargets[i]);
-        const FVector2D Delta = CandidateCenter - CurrentCenter;
-
-        if (FVector2D::DotProduct(Delta, DesiredDirection) <= 0.f)
+        const AActor* CandidateActor = ActorFocusTargets[i].Actor.Get();
+        if (CandidateActor == nullptr)
         {
             continue;
         }
 
-        ValidCandidates.Emplace(i, Delta);
+        const FVector DeltaWorld = CandidateActor->GetActorLocation() - CurrentLocation;
+        const FVector DeltaView = ViewRot.UnrotateVector(DeltaWorld);
+        // ignore depth by only considering right (Y) and up (Z) axes
+        const FVector2D Delta(DeltaView.Y, -DeltaView.Z);
+
+        if (Delta.IsNearlyZero())
+        {
+            continue;
+        }
+
+        Candidates.Emplace(i, Delta);
     }
 
-    if (ValidCandidates.Num() == 0)
+    if (Candidates.Num() == 0)
     {
         return CurrentIndex;
     }
 
-    ValidCandidates.Sort([&](auto& A, auto& B)
+    Candidates.Sort([&](const TPair<int32, FVector2D>& A, const TPair<int32, FVector2D>& B)
     {
         const float CosA = FVector2D::DotProduct(A.Value.GetSafeNormal(), DesiredDirection);
         const float CosB = FVector2D::DotProduct(B.Value.GetSafeNormal(), DesiredDirection);
@@ -508,7 +528,7 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
         return A.Value.SizeSquared() < B.Value.SizeSquared();
     });
 
-    return ValidCandidates[0].Key;
+    return Candidates[0].Key;
 }
 
 FVector2D UNsUISubsystem::GetWidgetCenterInViewport(const UWidget* const InWidget) const
