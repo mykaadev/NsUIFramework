@@ -472,8 +472,12 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
         default: return CurrentIndex;
     }
 
+    // Track best candidate. We first search only the half-plane in the
+    // requested direction. If none are found, we relax to the closest
+    // angular match so navigation always advances somewhere.
     int32 BestIndex = CurrentIndex;
     float BestScore = -FLT_MAX;
+    bool bFoundForward = false;
 
     for (int32 i = 0; i < ActorFocusTargets.Num(); ++i)
     {
@@ -490,37 +494,21 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
 
         const FVector2D Dir = Delta.GetSafeNormal();
         const float Dot = FVector2D::DotProduct(Dir, DesiredDirection);
-        if (Dot <= 0.f)
-        {
-            continue; // candidate is behind the desired direction
-        }
-
-        // Prefer candidates more aligned with the desired direction, then by distance
         const float Score = Dot - 0.0001f * Delta.SizeSquared();
-        if (Score > BestScore)
+
+        if (Dot > 0.f)
+        {
+            if (!bFoundForward || Score > BestScore)
+            {
+                bFoundForward = true;
+                BestScore = Score;
+                BestIndex = i;
+            }
+        }
+        else if (!bFoundForward && Score > BestScore)
         {
             BestScore = Score;
             BestIndex = i;
-        }
-    }
-
-    if (BestIndex == CurrentIndex)
-    {
-        // No candidate in the desired direction; fall back to nearest overall
-        float ClosestDistSq = FLT_MAX;
-        for (int32 i = 0; i < ActorFocusTargets.Num(); ++i)
-        {
-            if (i == CurrentIndex)
-            {
-                continue;
-            }
-            const FVector2D Delta = GetActorScreenCenter(ActorFocusTargets[i]) - CurrentCenter;
-            const float DistSq = Delta.SizeSquared();
-            if (DistSq < ClosestDistSq)
-            {
-                ClosestDistSq = DistSq;
-                BestIndex = i;
-            }
         }
     }
 
