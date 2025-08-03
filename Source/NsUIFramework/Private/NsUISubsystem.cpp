@@ -460,16 +460,7 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
         return CurrentIndex;
     }
 
-    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-    const AActor* CurrentActor = ActorFocusTargets[CurrentIndex].Actor.Get();
-    if (PC == nullptr || CurrentActor == nullptr)
-    {
-        return CurrentIndex;
-    }
-
-    FVector ViewLoc;
-    FRotator ViewRot;
-    PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+    const FVector2D CurrentCenter = GetActorScreenCenter(ActorFocusTargets[CurrentIndex]);
 
     FVector2D DesiredDirection(0.f, 0.f);
     switch (InNavDir)
@@ -481,10 +472,8 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
         default: return CurrentIndex;
     }
 
-    TArray<TPair<int32, FVector2D>> Candidates;
-    Candidates.Reserve(ActorFocusTargets.Num() - 1);
-
-    const FVector CurrentLocation = CurrentActor->GetActorLocation();
+    int32 BestIndex = CurrentIndex;
+    float BestScore = -FLT_MAX;
 
     for (int32 i = 0; i < ActorFocusTargets.Num(); ++i)
     {
@@ -493,42 +482,49 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
             continue;
         }
 
-        const AActor* CandidateActor = ActorFocusTargets[i].Actor.Get();
-        if (CandidateActor == nullptr)
-        {
-            continue;
-        }
-
-        const FVector DeltaWorld = CandidateActor->GetActorLocation() - CurrentLocation;
-        const FVector DeltaView = ViewRot.UnrotateVector(DeltaWorld);
-        // ignore depth by only considering right (Y) and up (Z) axes
-        const FVector2D Delta(DeltaView.Y, -DeltaView.Z);
-
+        const FVector2D Delta = GetActorScreenCenter(ActorFocusTargets[i]) - CurrentCenter;
         if (Delta.IsNearlyZero())
         {
             continue;
         }
 
-        Candidates.Emplace(i, Delta);
-    }
-
-    if (Candidates.Num() == 0)
-    {
-        return CurrentIndex;
-    }
-
-    Candidates.Sort([&](const TPair<int32, FVector2D>& A, const TPair<int32, FVector2D>& B)
-    {
-        const float CosA = FVector2D::DotProduct(A.Value.GetSafeNormal(), DesiredDirection);
-        const float CosB = FVector2D::DotProduct(B.Value.GetSafeNormal(), DesiredDirection);
-        if (!FMath::IsNearlyEqual(CosA, CosB))
+        const FVector2D Dir = Delta.GetSafeNormal();
+        const float Dot = FVector2D::DotProduct(Dir, DesiredDirection);
+        if (Dot <= 0.f)
         {
-            return CosA > CosB;
+            continue; // candidate is behind the desired direction
         }
-        return A.Value.SizeSquared() < B.Value.SizeSquared();
-    });
 
-    return Candidates[0].Key;
+        // Prefer candidates more aligned with the desired direction, then by distance
+        const float Score = Dot - 0.0001f * Delta.SizeSquared();
+        if (Score > BestScore)
+        {
+            BestScore = Score;
+            BestIndex = i;
+        }
+    }
+
+    if (BestIndex == CurrentIndex)
+    {
+        // No candidate in the desired direction; fall back to nearest overall
+        float ClosestDistSq = FLT_MAX;
+        for (int32 i = 0; i < ActorFocusTargets.Num(); ++i)
+        {
+            if (i == CurrentIndex)
+            {
+                continue;
+            }
+            const FVector2D Delta = GetActorScreenCenter(ActorFocusTargets[i]) - CurrentCenter;
+            const float DistSq = Delta.SizeSquared();
+            if (DistSq < ClosestDistSq)
+            {
+                ClosestDistSq = DistSq;
+                BestIndex = i;
+            }
+        }
+    }
+
+    return BestIndex;
 }
 
 FVector2D UNsUISubsystem::GetWidgetCenterInViewport(const UWidget* const InWidget) const
