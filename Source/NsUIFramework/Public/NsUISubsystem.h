@@ -99,9 +99,6 @@ public:
     /** Remove all registered actors */
     void ClearActorFocusTargets();
 
-    /** Access currently selected actors when in selection mode */
-    const TSet<TWeakObjectPtr<AActor>>& GetSelectedActors() const;
-
     /** Event fired when an actor is confirmed */
     FNsUIActorDelegate OnActorConfirmed;
 
@@ -162,9 +159,6 @@ private:
 
     /** List of registered world-actor focus targets */
     TArray<FNsUIActorFocusInfo> ActorFocusTargets;
-
-    /** Set of actors toggled by the user */
-    TSet<TWeakObjectPtr<AActor>> SelectedActors;
 
     /** Index of currently focused actor */
     int32 CurrentActorIndex;
