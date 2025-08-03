@@ -5,16 +5,30 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "NsUICursor.h"
+#include "Tickable.h"
 #include "NsUISubsystem.generated.h"
 
 /** A little alias for readability */
 using FWidgetCommand = TFunction<void(class UWidget*)>;
 
+class AActor;
+
+/** Holds info for a world actor registered as a focus target. */
+struct FNsUIActorFocusInfo
+{
+    TWeakObjectPtr<AActor> Actor;
+    /** Actor's projected bounds in viewport pixel coordinates */
+    FBox2D ScreenBounds;
+};
+
+/** Delegate used to notify about actor interactions */
+DECLARE_MULTICAST_DELEGATE_OneParam(FNsUIActorDelegate, AActor*);
+
 /**
  * Night Shift UI Subsystem
  */
 UCLASS()
-class NSUIFRAMEWORK_API UNsUISubsystem : public UGameInstanceSubsystem
+class NSUIFRAMEWORK_API UNsUISubsystem : public UGameInstanceSubsystem, public FTickableGameObject
 {
     GENERATED_BODY()
 
@@ -23,6 +37,12 @@ public:
 
     /** Constructor */
     UNsUISubsystem();
+
+    //~ Begin FTickableGameObject Interface
+    virtual void Tick(float DeltaTime) override;
+    virtual TStatId GetStatId() const override;
+    virtual bool IsTickable() const override { return bActorSelectionActive; }
+    //~ End FTickableGameObject Interface
 
     //~ Begin USubsystem Interface
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
@@ -61,6 +81,33 @@ public:
     /** Called when the player presses the Cancel input */
     bool HandleCancel();
 
+    /** Called when the player presses a toggle selection input */
+    void HandleToggle();
+
+    /** Enable world-actor selection mode */
+    void EnterActorSelectionMode();
+
+    /** Disable world-actor selection mode */
+    void ExitActorSelectionMode();
+
+    /** Register a world actor as a selectable focus target */
+    int32 RegisterActorFocus(AActor* Actor, const FBox2D& ScreenBounds);
+
+    /** Remove a previously registered actor */
+    void UnregisterActorFocus(AActor* Actor);
+
+    /** Remove all registered actors */
+    void ClearActorFocusTargets();
+
+    /** Event fired when an actor is confirmed */
+    FNsUIActorDelegate OnActorConfirmed;
+
+    /** Event fired when an actor is cancelled */
+    FNsUIActorDelegate OnActorCancelled;
+
+    /** Event fired when an actor is toggled */
+    FNsUIActorDelegate OnActorToggled;
+
     /**
     * If a widget’s explicit neighbor (e.g. GetUpNeighbor()) is null, we fall back
     * to this: scan all other widgets in the same layer (via the UI Subsystem) and
@@ -84,6 +131,9 @@ public:
     /** Called once at subsystem init to fill the maps */
     void InitializeCommandRegistry();
 
+    /** Move the cursor to the currently focused actor */
+    void UpdateActorCursor();
+
 // Variables
 private:
 
@@ -106,4 +156,19 @@ private:
 
     /** Map from widget class to what to do when HandleCancel() is pressed */
     TMap<UClass*, FWidgetCommand> CancelRegistry;
+
+    /** List of registered world-actor focus targets */
+    TArray<FNsUIActorFocusInfo> ActorFocusTargets;
+
+    /** Index of currently focused actor */
+    int32 CurrentActorIndex;
+
+    /** Whether we are in actor-selection mode */
+    bool bActorSelectionActive;
+
+    /** Find the next actor relative to current one based on navigation direction */
+    int32 FindBestActorBySpatialSearch(int32 CurrentIndex, EUINavigation NavDir) const;
+
+    /** Get center of actor's screen-space bounds */
+    FVector2D GetActorScreenCenter(const FNsUIActorFocusInfo& Info) const;
 };

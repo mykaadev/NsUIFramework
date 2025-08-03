@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "NsUISubsystem.h"
 #include "NsUILibrary.generated.h"
 
 /**
@@ -31,4 +32,21 @@ public:
     /** Walks the outer chain of a UWidget to find the UUserWidget that owns it (via its WidgetTree) */
     UFUNCTION()
     static UUserWidget* FindRootUserWidget(class UWidget* const InWidget);
+
+    /**
+     * Convenience helper to register actors for selection and bind callbacks.
+     * Clears any previously registered actors and delegate bindings, projects
+     * each actor's bounds to screen space and registers them with the UI
+     * subsystem.
+     *
+     * @param Actors     Actors that should become selectable.
+     * @param OnConfirm  Required delegate executed when the focused actor is confirmed.
+     * @param OnCancel   Optional delegate executed when selection is cancelled.
+     * @param OnToggle   Optional delegate executed when the current actor is toggled.
+     *                  Leave unbound if you do not need multi-selection support.
+     */
+    static void RegisterActorsForSelection(const TArray<AActor*>& Actors,
+        const FNsUIActorDelegate::FDelegate& OnConfirm,
+        const FNsUIActorDelegate::FDelegate& OnCancel = FNsUIActorDelegate::FDelegate(),
+        const FNsUIActorDelegate::FDelegate& OnToggle = FNsUIActorDelegate::FDelegate());
 };
