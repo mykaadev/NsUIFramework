@@ -129,7 +129,7 @@ void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors,
 
             const FBox Bounds = Actor->GetComponentsBoundingBox(true);
             FVector Corners[8];
-            Bounds.GetCorners(Corners);
+            Bounds.GetVertices(Corners);
 
             FVector2D Min(TNumericLimits<float>::Max(), TNumericLimits<float>::Max());
             FVector2D Max(TNumericLimits<float>::Lowest(), TNumericLimits<float>::Lowest());
