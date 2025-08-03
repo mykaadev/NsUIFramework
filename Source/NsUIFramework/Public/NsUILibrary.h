@@ -44,6 +44,7 @@ public:
      * @param OnCancel   Optional delegate executed when selection is cancelled.
      * @param OnToggle   Optional delegate executed when the current actor is toggled.
      *                  Leave unbound if you do not need multi-selection support.
+     *                  Automatically enters actor-selection mode.
      */
     static void RegisterActorsForSelection(const TArray<AActor*>& Actors,
         const FNsUIActorDelegate::FDelegate& OnConfirm,

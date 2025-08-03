@@ -164,5 +164,7 @@ void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors,
         {
             UISubsystem->OnActorToggled.Add(OnToggle);
         }
+
+        UISubsystem->EnterActorSelectionMode();
     }
 }

@@ -307,7 +307,14 @@ bool UNsUISubsystem::HandleConfirm()
 {
     if (bActorSelectionActive)
     {
-        if (ActorFocusTargets.IsValidIndex(CurrentActorIndex))
+        if (SelectedActors.Num() > 0)
+        {
+            for (const TWeakObjectPtr<AActor>& ActorPtr : SelectedActors)
+            {
+                OnActorConfirmed.Broadcast(ActorPtr.Get());
+            }
+        }
+        else if (ActorFocusTargets.IsValidIndex(CurrentActorIndex))
         {
             OnActorConfirmed.Broadcast(ActorFocusTargets[CurrentActorIndex].Actor.Get());
         }
@@ -347,6 +354,7 @@ bool UNsUISubsystem::HandleCancel()
         {
             OnActorCancelled.Broadcast(ActorFocusTargets[CurrentActorIndex].Actor.Get());
         }
+        SelectedActors.Reset();
         ExitActorSelectionMode();
         return true;
     }
@@ -541,13 +549,23 @@ void UNsUISubsystem::HandleToggle()
 {
     if (bActorSelectionActive && ActorFocusTargets.IsValidIndex(CurrentActorIndex))
     {
-        OnActorToggled.Broadcast(ActorFocusTargets[CurrentActorIndex].Actor.Get());
+        AActor* Actor = ActorFocusTargets[CurrentActorIndex].Actor.Get();
+        if (SelectedActors.Contains(Actor))
+        {
+            SelectedActors.Remove(Actor);
+        }
+        else
+        {
+            SelectedActors.Add(Actor);
+        }
+        OnActorToggled.Broadcast(Actor);
     }
 }
 
 void UNsUISubsystem::EnterActorSelectionMode()
 {
     bActorSelectionActive = true;
+    SelectedActors.Reset();
     CurrentActorIndex = ActorFocusTargets.Num() > 0 ? 0 : INDEX_NONE;
     UpdateActorCursor();
 }
@@ -556,6 +574,7 @@ void UNsUISubsystem::ExitActorSelectionMode()
 {
     bActorSelectionActive = false;
     CurrentActorIndex = INDEX_NONE;
+    SelectedActors.Reset();
     if (CursorWidget)
     {
         CursorWidget->MoveToWidget(nullptr);
@@ -583,6 +602,7 @@ void UNsUISubsystem::UnregisterActorFocus(AActor* Actor)
 void UNsUISubsystem::ClearActorFocusTargets()
 {
     ActorFocusTargets.Reset();
+    SelectedActors.Reset();
     CurrentActorIndex = INDEX_NONE;
     if (CursorWidget)
     {
@@ -636,6 +656,11 @@ void UNsUISubsystem::Tick(float DeltaTime)
     }
 
     UpdateActorCursor();
+}
+
+const TSet<TWeakObjectPtr<AActor>>& UNsUISubsystem::GetSelectedActors() const
+{
+    return SelectedActors;
 }
 
 TStatId UNsUISubsystem::GetStatId() const
