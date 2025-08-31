@@ -1,4 +1,4 @@
-// Copyright (C) 2024 mykaa. All rights reserved.
+// Copyright (C) 2025 mykaadev. All rights reserved.
 
 #include "NsUISubsystem.h"
 
@@ -73,8 +73,7 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(
     {
         if (UUserWidget* const NewWidget = ActiveUILayout->PushContentToLayer(InLayerType, InWidget))
         {
-            if (NewWidget->GetClass()->ImplementsInterface(
-                    UNsUINavigation::StaticClass()))
+            if (NewWidget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
             {
                 if (const INsUINavigation* const NavigationInterface = Cast<INsUINavigation>(NewWidget))
                 {
