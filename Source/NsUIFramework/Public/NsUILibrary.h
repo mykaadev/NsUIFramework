@@ -29,10 +29,14 @@ public:
     UFUNCTION()
     static void GatherAllNavigableDescendants(const class UUserWidget* const InRootWidget, TArray<class UWidget*>& InOutNavigables);
 
-    /** Walks the outer chain of a UWidget to find the UUserWidget that owns it (via its WidgetTree) */
+    /**
+     * Find the "content root" for navigation:
+     * - the outermost UUserWidget that is still *inside* an UNsUILayer
+     * This is the widget that the layer pushed on its stack (e.g., Inventory), not a nested cell/user widget (e.g., Item) and not the whole layout.
+     */
     UFUNCTION()
-    static UUserWidget* FindRootUserWidget(class UWidget* const InWidget);
-
+    static UUserWidget* FindLayerContentRoot(UWidget* InWidget);
+    
     /**
      * Convenience helper to register actors for selection and bind callbacks.
      * Clears any previously registered actors and delegate bindings, projects

@@ -5,6 +5,7 @@
 #include "INsUINavigation.h"
 #include "NsUILayout.h"
 #include "NsUISubsystem.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 
@@ -26,30 +27,46 @@ void UNsUILibrary::PopWidgetFromLayer(const ENsUILayerType InLayerType)
     }
 }
 
-UUserWidget* UNsUILibrary::FindRootUserWidget(UWidget* const InWidget)
+UUserWidget* UNsUILibrary::FindLayerContentRoot(UWidget* InWidget)
 {
-    if (InWidget == nullptr)
+    if (!IsValid(InWidget)) return nullptr;
+
+    // 1) Climb the visual parent chain to the local root panel inside the innermost user widget
+    UWidget* Visual = InWidget;
+    while (UPanelWidget* P = Visual->GetParent())
     {
-        return nullptr;
+        Visual = P;
     }
 
-    UUserWidget* LastFound = nullptr;
-    UObject* Outer = InWidget;
+    // 2) That panel belongs to some innermost UUserWidget (e.g., Item)
+    UUserWidget* InnerMostUW = Visual->GetTypedOuter<UUserWidget>();
+    if (!InnerMostUW) return nullptr;
 
-    // Walk up until we run out of outers.
-    while (Outer != nullptr)
+    // 3) Climb outward across nested UUserWidgets until the parent panel lives under a NsUILayer
+    UUserWidget* OutermostWithinLayer = InnerMostUW;
+    for (;;)
     {
-        if (UUserWidget* const UserWidget = Cast<UUserWidget>(Outer))
+        UPanelWidget* ParentPanel = OutermostWithinLayer->GetParent();
+        if (!ParentPanel) break;
+
+        // When the parent panel is in a UNsUILayer's WidgetTree, we've reached the layer boundary
+        if (ParentPanel->GetTypedOuter<UNsUILayer>() != nullptr)
         {
-            // Record each UUserWidget we see
-            LastFound = UserWidget;
+            break; // OutermostWithinLayer is the layer's top-of-stack content widget
         }
 
-        Outer = Outer->GetOuter();
+        // Otherwise step out one level: panel belongs to another UUserWidget (e.g., Inventory)
+        if (UUserWidget* NextUW = ParentPanel->GetTypedOuter<UUserWidget>())
+        {
+            OutermostWithinLayer = NextUW;
+        }
+        else
+        {
+            break;
+        }
     }
 
-    // 'LastFound' is the topmost UUserWidget
-    return LastFound;
+    return OutermostWithinLayer;
 }
 
 static bool CanWidgetReceiveFocus(const UWidget* Widget)
