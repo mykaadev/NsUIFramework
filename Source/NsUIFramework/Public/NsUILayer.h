@@ -1,13 +1,14 @@
-// Copyright (C) 2024 mykaa. All rights reserved.
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "NsUILibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "NsUILayer.generated.h"
 
 /**
- * Night Shift UI Layer
+ * Nulled Softworks UI Layer
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayer : public UUserWidget
@@ -23,11 +24,15 @@ public:
 
     /** Push content */
     UFUNCTION(BlueprintCallable)
-    class UUserWidget* Push(const TSoftClassPtr<class UUserWidget>& InClass);
+    class UNsUIWidgetStackElement* Push(const TSoftClassPtr<class UUserWidget>& InClass);
 
     /** Pop content */
     UFUNCTION(BlueprintCallable)
-    class UUserWidget* Pop();
+    class UNsUIWidgetStackElement* Pop();
+
+    /** Get Stack */
+    UFUNCTION(BlueprintCallable)
+    TArray<class UNsUIWidgetStackElement*> GetStack() const;
 
     /** Clear stack */
     UFUNCTION(BlueprintCallable)
@@ -35,7 +40,7 @@ public:
 
     /** Peek */
     UFUNCTION(BlueprintCallable)
-    class UUserWidget* Peek();
+    class UNsUIWidgetStackElement* Peek();
 
     /** Collapse top widget */
     UFUNCTION(BlueprintCallable)
@@ -45,20 +50,34 @@ public:
     UFUNCTION(BlueprintCallable)
     void ShowTop();
 
+    /** Find Stack Element */
+    UFUNCTION(BlueprintCallable)
+    class UNsUIWidgetStackElement* FindStackElement(const UUserWidget* InInvokerScope, const UWidget* InInvokerElement);
+
     /** Get stack list names */
     UFUNCTION(BlueprintCallable)
     FText GetStackListNames();
+
+    /** Gets the initial focus for a widget */
+    UFUNCTION(BlueprintCallable)
+    class UWidget* GetInitialFocusForWidget(class UUserWidget* InWidget);
+
+private:
+
+    /** Handles the push functionality of the widget when it implements our interface */
+    UFUNCTION()
+    void PushWidget(class UUserWidget* InWidget);
 
 // Variables
 public:
 
     /** Border that contains our widget */
-    UPROPERTY(BlueprintReadWrite, EditAnywhere)
-    TObjectPtr<class UBorder> RootBorder;
+    UPROPERTY(meta = (BindWidget))
+    TObjectPtr<class UBorder> LayerRoot;
 
 protected:
 
     /** Widget Stack */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-    TArray<class UUserWidget*> WidgetStack;
+    TArray<class UNsUIWidgetStackElement*> Stack;
 };

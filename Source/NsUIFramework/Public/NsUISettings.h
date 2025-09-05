@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 mykaa. All rights reserved.
+﻿// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #pragma once
 
@@ -7,7 +7,7 @@
 #include "NsUISettings.generated.h"
 
 /**
- * Night Shift UI Settings
+ * Nulled Softworks UI Settings
  */
 UCLASS(Config=Game, DefaultConfig)
 class NSUIFRAMEWORK_API UNsUISettings : public UDeveloperSettings

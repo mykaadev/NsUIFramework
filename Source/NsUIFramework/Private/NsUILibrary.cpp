@@ -1,4 +1,4 @@
-// Copyright (C) 2025 mykaadev. All rights reserved.
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILibrary.h"
 #include "Blueprint/WidgetTree.h"
@@ -117,7 +117,8 @@ void UNsUILibrary::GatherAllNavigableDescendants(const UUserWidget* const InRoot
     }
 }
 
-void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors,
+void UNsUILibrary::RegisterActorsForSelection(
+    const TArray<AActor*>& Actors,
     const FNsUIActorDelegate::FDelegate& OnConfirm,
     const FNsUIActorDelegate::FDelegate& OnCancel,
     const FNsUIActorDelegate::FDelegate& OnToggle)

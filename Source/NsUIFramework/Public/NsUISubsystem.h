@@ -1,31 +1,15 @@
-// Copyright (C) 2024 mykaa. All rights reserved.
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "NsUICursor.h"
+#include "NsUILibrary.h"
 #include "Tickable.h"
 #include "NsUISubsystem.generated.h"
 
-/** A little alias for readability */
-using FWidgetCommand = TFunction<void(class UWidget*)>;
-
-class AActor;
-
-/** Holds info for a world actor registered as a focus target. */
-struct FNsUIActorFocusInfo
-{
-    TWeakObjectPtr<AActor> Actor;
-    /** Actor's projected bounds in viewport pixel coordinates */
-    FBox2D ScreenBounds;
-};
-
-/** Delegate used to notify about actor interactions */
-DECLARE_MULTICAST_DELEGATE_OneParam(FNsUIActorDelegate, AActor*);
-
 /**
- * Night Shift UI Subsystem
+ * Nulled Softworks UI Subsystem
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUISubsystem : public UGameInstanceSubsystem, public FTickableGameObject
@@ -125,6 +109,9 @@ public:
     /** Explicitly set which widget is currently “focused” in the UI, called by the layer when it pushes or pops a widget */
     void SetCurrentFocusedWidget(class UWidget* const InNewFocus);
 
+    /** Get the current focused widget */
+    class UWidget* GetCurrentFocusedWidget() const;
+
     /** Helper: if CurrentFocusedWidget implements INsUINavigable, return a pointer to that interface */
     class INsUINavigation* GetCurrentNavInterface() const;
 
@@ -133,6 +120,9 @@ public:
 
     /** Move the cursor to the currently focused actor */
     void UpdateActorCursor();
+
+    /** Get current layer stack scope */
+    UNsUIWidgetStackElement* GetCurrentScope();
 
 // Variables
 private:
@@ -145,11 +135,9 @@ private:
     UPROPERTY(VisibleDefaultsOnly)
     TObjectPtr<class UNsUILayout> ActiveUILayout;
 
-    /** A weak pointer to the currently focused widget. */
-    TWeakObjectPtr<UWidget> CurrentFocusedWidget;
-
-    /** A weak pointer to the previous focused widget. */
-    TWeakObjectPtr<UWidget> PreviousFocusedWidget;
+    /** Current layer stack scope */
+    UPROPERTY(VisibleAnywhere)
+    TObjectPtr<class UNsUIWidgetStackElement> CurrentScope;
 
     /** Map from widget class to what to do when HandleConfirm() is pressed */
     TMap<UClass*, FWidgetCommand> ConfirmRegistry;

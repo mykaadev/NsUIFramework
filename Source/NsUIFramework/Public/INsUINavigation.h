@@ -1,4 +1,6 @@
-﻿#pragma once
+﻿// Copyright (C) 2025 nulled.softworks. All rights reserved.
+
+#pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
@@ -55,4 +57,9 @@ public:
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
     void OnWidgetPushed();
     virtual void OnWidgetPushed_Implementation() = 0;
+
+    /** Get initial focus widget */
+    UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+    class UWidget* GetInitialFocusWidget();
+    virtual class UWidget* GetInitialFocusWidget_Implementation() = 0;
 };

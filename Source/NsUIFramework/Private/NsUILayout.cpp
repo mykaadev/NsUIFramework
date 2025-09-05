@@ -1,8 +1,9 @@
-// Copyright (C) 2024 mykaa. All rights reserved.
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILayout.h"
 #include "Components/Overlay.h"
 #include "NsUILayer.h"
+#include "NsUILibrary.h"
 
 void UNsUILayout::NativeOnInitialized()
 {
@@ -26,8 +27,7 @@ void UNsUILayout::RegisterLayer(const ENsUILayerType InLayerType, class UNsUILay
 
 bool UNsUILayout::UnregisterLayer(const ENsUILayerType InLayerType)
 {
-    UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType);
-    if (FoundLayer != nullptr)
+    if ( UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
     {
         FoundLayer->RemoveFromParent();
     }
@@ -35,23 +35,33 @@ bool UNsUILayout::UnregisterLayer(const ENsUILayerType InLayerType)
     return RegisteredLayers.Remove(InLayerType) > 0;
 }
 
-UUserWidget* UNsUILayout::PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass)
+UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass)
 {
-    UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType);
-    if (FoundLayer != nullptr)
+    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
     {
-        return FoundLayer->Push(InWidgetClass);
+        if (UNsUIWidgetStackElement* Content = FoundLayer->Push(InWidgetClass))
+        {
+            ForceLayoutPrepass();
+            // The new content that was just pushed
+            Content->WidgetScopeLayerType = InLayerType; // fill the layer where he belongs to
+            return Content;
+        }
     }
 
+    
     return nullptr;
 }
 
-UUserWidget* UNsUILayout::PopContentFromLayer(const ENsUILayerType InLayerType)
+UNsUIWidgetStackElement* UNsUILayout::PopContentFromLayer(const ENsUILayerType InLayerType)
 {
-    UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType);
-    if (FoundLayer != nullptr)
+    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
     {
-        return FoundLayer->Pop();
+        // if the layer stack is not empty, we can just keep swapping from widget to widget within that stack
+        // if the layer stack is empty, we use the invoker info, now we have to return the focus to the original widget that pushed this one
+        
+        UNsUIWidgetStackElement* TopElementOrInvokerInfo = FoundLayer->Pop();
+        ForceLayoutPrepass();
+        return FindInvokerWidgetInLayout(TopElementOrInvokerInfo);
     }
 
     return nullptr;
@@ -71,9 +81,33 @@ void UNsUILayout::ClearAllLayers() const
 
 void UNsUILayout::ClearLayer(const ENsUILayerType InLayerType)
 {
-    UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType);
-    if (FoundLayer != nullptr)
+    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
     {
         FoundLayer->ClearStack();
     }
+}
+
+UNsUIWidgetStackElement* UNsUILayout::FindInvokerWidgetInLayout(const UNsUIWidgetStackElement* InWidget)
+{
+    if (InWidget != nullptr)
+    {
+        // if this widget was pushed from other widget within or the same layer or not
+        if (InWidget->InvokerWidgetScope != nullptr && InWidget->InvokerElement != nullptr)
+        {
+            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->InvokerLayerType))
+            {
+                return FoundLayer->FindStackElement(InWidget->InvokerWidgetScope, InWidget->InvokerElement);
+            }     
+        } // if the widget does not have an invoker (could be the first widget summoned to the layer) we retrieve it again
+        else if (InWidget->WidgetScope != nullptr && InWidget->WidgetScopeFocusedElement != nullptr)
+        {
+            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->WidgetScopeLayerType))
+            {
+                return FoundLayer->FindStackElement(InWidget->WidgetScope, InWidget->WidgetScopeFocusedElement);
+            }     
+        }
+       
+    }
+
+    return nullptr;
 }

@@ -1,5 +1,8 @@
-#include "NsUICursor.h"
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
+#include "NsUICursor.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/PanelWidget.h"
 #include "Widgets/SViewport.h"
 
@@ -13,95 +16,131 @@ UNsUICursor::UNsUICursor(const FObjectInitializer& ObjectInitializer)
 
 void UNsUICursor::MoveToWidget(UWidget* const InTarget)
 {
-    //----------------------------------------------------------------------
-    // 0) Guard clauses
-    //----------------------------------------------------------------------
-    if (!IsValid(InTarget))
+    // Hide if no valid target.
+    if (!IsValid(InTarget) || !InTarget->IsVisible())
     {
-        SetVisibility(ESlateVisibility::Hidden);
+        SetVisibility(ESlateVisibility::Collapsed);
         return;
     }
 
-    //----------------------------------------------------------------------
-    // 1) Make sure the target’s geometry exists
-    //    - Force a one-frame layout pass if needed
-    //----------------------------------------------------------------------
-    InTarget->ForceLayoutPrepass(); // builds the Slate widget if this is the very first time
-
-    const FGeometry TargetGeo = InTarget->GetCachedGeometry();
-    if (!InTarget->GetCachedWidget().IsValid())
+    // Ensure Slate widgets exist.
+    const TSharedPtr<SWidget> TargetSlate = InTarget->GetCachedWidget();
+    if (!TargetSlate.IsValid())
     {
-        // Still no geometry?  Bail early – we’ll catch it next frame.
         if (UWorld* const World = GetWorld())
         {
-            World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(this, &UNsUICursor::MoveToWidget, InTarget));
+            World->GetTimerManager().SetTimerForNextTick(
+                FTimerDelegate::CreateUObject(this, &UNsUICursor::MoveToWidget, InTarget));
         }
-
         return;
     }
 
-    //----------------------------------------------------------------------
-    // 2) Get the target’s anchor point in absolute (desktop) space
-    //----------------------------------------------------------------------
-    const FVector2D TargetTopLeft = TargetGeo.LocalToAbsolute(FVector2D::ZeroVector);
-    const FVector2D TargetSize    = TargetGeo.GetLocalSize();
-    const FVector2D TargetAnchorPos = TargetTopLeft + TargetSize * TargetAnchor;
-
-    //----------------------------------------------------------------------
-    // 3) Convert absolute → viewport space
-    //    Slate gives us the geometry of the **game viewport widget**,
-    //    so we can translate absolute pixels into viewport-local pixels.
-    //----------------------------------------------------------------------
-    FVector2D ViewportPos = TargetAnchorPos;
-    if (GEngine && GEngine->GameViewport)
+    // Make sure geometry is fresh on both sides.
+    if (UUserWidget* const TargetRoot = InTarget->GetTypedOuter<UUserWidget>())
     {
-        const TSharedPtr<SViewport> ViewportWidget = GEngine->GameViewport->GetGameViewportWidget();
-        if (ViewportWidget.IsValid())
-        {
-            const FGeometry ViewportGeo = ViewportWidget->GetCachedGeometry(); // safer than GetTickSpaceGeometry
-            ViewportPos = ViewportGeo.AbsoluteToLocal(TargetAnchorPos);
-        }
+        TargetRoot->ForceLayoutPrepass();
+    }
+    if (UUserWidget* const CursorRoot = GetTypedOuter<UUserWidget>())
+    {
+        CursorRoot->ForceLayoutPrepass();
     }
 
-    //----------------------------------------------------------------------
-    // 4) Decide the cursor’s own size (skip GetDesiredSize – too early)
-    //----------------------------------------------------------------------
-    ForceLayoutPrepass();  // build this widget’s geometry
-    const FVector2D CursorSize = GetDesiredSize();
+    // We’ll compute everything from absolute space.
+    const FGeometry ViewportGeo = UWidgetLayoutLibrary::GetViewportWidgetGeometry(this);
+    if (ViewportGeo.GetLocalSize().IsNearlyZero())
+    {
+        if (UWorld* const World = GetWorld())
+        {
+            World->GetTimerManager().SetTimerForNextTick(
+                FTimerDelegate::CreateUObject(this, &UNsUICursor::MoveToWidget, InTarget));
+        }
+        return;
+    }
 
-    //----------------------------------------------------------------------
-    // 5) Apply & show
-    //    - If we're added directly to the viewport, use the viewport helpers
-    //    - Otherwise, move via render translation so we work as a panel child
-    //----------------------------------------------------------------------
+    const FGeometry TargetGeo = InTarget->GetCachedGeometry();
+    const FVector2D TargetSize = TargetGeo.GetLocalSize();
+    if (TargetSize.IsNearlyZero())
+    {
+        if (UWorld* const World = GetWorld())
+        {
+            World->GetTimerManager().SetTimerForNextTick(
+                FTimerDelegate::CreateUObject(this, &UNsUICursor::MoveToWidget, InTarget));
+        }
+        return;
+    }
+
+    // Anchor in absolute (desktop) space.
+    const FVector2D AbsAnchor = TargetGeo.LocalToAbsolute(TargetAnchor * TargetSize);
+
+    // Get the cursor’s pixel size.
+    FVector2D CursorSize = GetDesiredSize();
+    if (CursorSize.IsNearlyZero())
+    {
+        SynchronizeProperties();
+        InvalidateLayoutAndVolatility();
+        CursorSize = GetDesiredSize();
+    }
+
+    // If the cursor is a top-level viewport widget, position in viewport space.
     if (IsInViewport())
     {
-        const FVector2D DesiredPos = ViewportPos - CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
-        SetAlignmentInViewport(CursorAlignment);
-        SetPositionInViewport(DesiredPos, /*bRemoveDPIScale=*/false);
+        const FVector2D ViewportLocal = ViewportGeo.AbsoluteToLocal(AbsAnchor);
+        const FVector2D DesiredPosViewport =
+            ViewportLocal - (CursorSize * CursorAlignment) + FVector2D(HorizontalPadding, 0.0f);
+
+        SetPositionInViewport(DesiredPosViewport, /*bRemoveDPIScale=*/false);
         SetDesiredSizeInViewport(CursorSize);
+        SetRenderTransformPivot(CursorAlignment);
+#if !UE_BUILD_SHIPPING
+        UE_LOG(LogTemp, Warning, TEXT("[Cursor] VP LocalPosition: X:%.6f Y:%.6f"), DesiredPosViewport.X, DesiredPosViewport.Y);
+#endif
     }
     else
     {
-        FVector2D LocalPos = FVector2D::ZeroVector;
-
-        if (UPanelWidget* const ParentWidget = GetParent())
+        // Cursor is inside your Layout tree. Place it in the parent’s local space.
+        UPanelWidget* const Parent = GetParent();
+        if (!Parent)
         {
-            ParentWidget->ForceLayoutPrepass();
-            const FGeometry ParentGeo = ParentWidget->GetCachedGeometry();
-
-            const FVector2D TargetAnchorAbs = TargetGeo.LocalToAbsolute(TargetGeo.GetLocalSize() * TargetAnchor);
-            const FVector2D LocalAnchor = ParentGeo.AbsoluteToLocal(TargetAnchorAbs);
-
-            const FVector2D CursorOffset = CursorSize * CursorAlignment + FVector2D(HorizontalPadding, 0.0f);
-            LocalPos = LocalAnchor - CursorOffset;
+            // No parent yet — try again next tick.
+            if (UWorld* const World = GetWorld())
+            {
+                World->GetTimerManager().SetTimerForNextTick(
+                    FTimerDelegate::CreateUObject(this, &UNsUICursor::MoveToWidget, InTarget));
+            }
+            return;
         }
 
-        SetRenderTransformPivot(CursorAlignment);
-        SetRenderTranslation(LocalPos);
+        // Convert absolute anchor to the parent’s local space.
+        const FGeometry ParentGeo = Parent->GetCachedGeometry();
+        const FVector2D ParentLocal = ParentGeo.AbsoluteToLocal(AbsAnchor);
+        const FVector2D DesiredLocal =
+            ParentLocal - (CursorSize * CursorAlignment) + FVector2D(HorizontalPadding, 0.0f);
+
+        // Best: if parent is a Canvas, set slot position (authoritative, no extra transforms).
+        if (UCanvasPanelSlot* const CanvasSlot = Cast<UCanvasPanelSlot>(Slot))
+        {
+            CanvasSlot->SetAlignment(CursorAlignment);
+            CanvasSlot->SetAutoSize(true);
+            CanvasSlot->SetPosition(DesiredLocal);
+            CanvasSlot->SetZOrder(9999); // ensure on top within the Layout
+#if !UE_BUILD_SHIPPING
+            UE_LOG(LogTemp, Warning, TEXT("[Cursor] Canvas LocalPosition: X:%.6f Y:%.6f"), DesiredLocal.X, DesiredLocal.Y);
+#endif
+        }
+        else
+        {
+            // Fallback for Overlay/VerticalBox/etc.: use render translation in parent space.
+            SetRenderTransformPivot(CursorAlignment);
+            FWidgetTransform Xform = RenderTransform;
+            Xform.Translation = DesiredLocal;
+            SetRenderTransform(Xform);
+#if !UE_BUILD_SHIPPING
+            UE_LOG(LogTemp, Warning, TEXT("[Cursor] RenderXform LocalPosition: X:%.2f Y:%.2f"), DesiredLocal.X, DesiredLocal.Y);
+#endif
+        }
     }
 
-    SetVisibility(ESlateVisibility::HitTestInvisible);
+    SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 void UNsUICursor::MoveToScreenPosition(const FVector2D& InViewportPos)
@@ -138,5 +177,5 @@ void UNsUICursor::MoveToScreenPosition(const FVector2D& InViewportPos)
         SetRenderTranslation(LocalPos);
     }
 
-    SetVisibility(ESlateVisibility::HitTestInvisible);
+    SetVisibility(ESlateVisibility::Visible);
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2025 mykaadev. All rights reserved.
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUISubsystem.h"
 
@@ -13,6 +13,7 @@
 #include "NsUILayout.h"
 #include "NsUILibrary.h"
 #include "NsUISettings.h"
+#include "NsUIWidget.h"
 #include "Stats/Stats.h"
 
 UNsUISubsystem::UNsUISubsystem()
@@ -69,17 +70,15 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<class UUserWi
 {
     if (ActiveUILayout != nullptr)
     {
-        if (UUserWidget* const NewWidget = ActiveUILayout->PushContentToLayer(InLayerType, InWidget))
+        CurrentScope = ActiveUILayout->PushContentToLayer(InLayerType, InWidget);
+        if (CurrentScope != nullptr)
         {
-            if (NewWidget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
-            {
-                if (const INsUINavigation* const NavigationInterface = Cast<INsUINavigation>(NewWidget))
-                {
-                    NavigationInterface->Execute_OnWidgetPushed(NewWidget);
-                }
-            }
-
-            return NewWidget;
+            SetCurrentFocusedWidget(CurrentScope->WidgetScopeFocusedElement);
+            return CurrentScope->WidgetScope;
+        }
+        else
+        {
+            SetCurrentFocusedWidget(nullptr);
         }
     }
 
@@ -90,15 +89,14 @@ void UNsUISubsystem::PopWidgetFromLayer(const ENsUILayerType InLayerType)
 {
     if (ActiveUILayout != nullptr)
     {
-        UUserWidget* const TopWidgetInStack = ActiveUILayout->PopContentFromLayer(InLayerType);
-        if (TopWidgetInStack != nullptr &&
-            TopWidgetInStack->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+        // get the new top-of-stack (the widget we are restoring/bringing back)
+        CurrentScope = ActiveUILayout->PopContentFromLayer(InLayerType);
+        if (CurrentScope != nullptr)
         {
-            SetCurrentFocusedWidget(TopWidgetInStack);
+            SetCurrentFocusedWidget(CurrentScope->WidgetScopeFocusedElement);
         }
         else
         {
-            // no navigable widget left → clear focus
             SetCurrentFocusedWidget(nullptr);
         }
     }
@@ -114,9 +112,7 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& I
             ActiveUILayout->RemoveFromParent();
         }
 
-        ActiveUILayout = CreateWidget<UNsUILayout>(
-                LocalPlayerController->GetWorld(),
-                InLayout.LoadSynchronous());
+        ActiveUILayout = CreateWidget<UNsUILayout>(LocalPlayerController->GetWorld(), InLayout.LoadSynchronous());
 
         if (ActiveUILayout != nullptr)
         {
@@ -134,11 +130,11 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& I
                 CursorWidget = CreateWidget<UNsUICursor>(LocalPlayerController, Settings->CursorWidgetClass.LoadSynchronous());
                 if (CursorWidget != nullptr && ActiveUILayout->WidgetTree != nullptr)
                 {
-                    if (UPanelWidget* const RootPanel =
-                            Cast<UPanelWidget>(ActiveUILayout->WidgetTree->RootWidget))
+                    if (UPanelWidget* const RootPanel = Cast<UPanelWidget>(ActiveUILayout->WidgetTree->RootWidget))
                     {
                         RootPanel->AddChild(CursorWidget);
                         CursorWidget->SetVisibility(ESlateVisibility::Visible);
+                        UE_LOG(LogTemp, Warning, TEXT("Cursor was created successfully"));
                     }
                 }
             }
@@ -153,11 +149,11 @@ UNsUILayout* UNsUISubsystem::GetActiveUILayout() const
 
 INsUINavigation* UNsUISubsystem::GetCurrentNavInterface() const
 {
-    if (CurrentFocusedWidget.IsValid())
+    if (CurrentScope->WidgetScopeFocusedElement != nullptr)
     {
-        if (CurrentFocusedWidget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+        if (CurrentScope->WidgetScopeFocusedElement->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
         {
-            return Cast<INsUINavigation>(CurrentFocusedWidget.Get());
+            return Cast<INsUINavigation>(CurrentScope->WidgetScopeFocusedElement);
         }
     }
     return nullptr;
@@ -204,15 +200,10 @@ void UNsUISubsystem::InitializeCommandRegistry()
 
 void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
 {
-    if (CurrentFocusedWidget != InNewFocus)
+    CursorWidget->InvalidateLayoutAndVolatility();
+    
+    if (InNewFocus != nullptr && InNewFocus->GetOwningPlayer() != nullptr)
     {
-        PreviousFocusedWidget = CurrentFocusedWidget;
-    }
-
-    if (InNewFocus != nullptr && InNewFocus->GetOwningPlayer())
-    {
-        CurrentFocusedWidget = InNewFocus;
-
         // Actually request keyboard focus for that widget:
         InNewFocus->SetUserFocus(InNewFocus->GetOwningPlayer());
         InNewFocus->SetKeyboardFocus();
@@ -227,15 +218,25 @@ void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
     }
     else
     {
-        CurrentFocusedWidget = nullptr;
-
         if (CursorWidget != nullptr)
         {
             CursorWidget->MoveToWidget(nullptr);
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("Previous Focus: %s, New Focus: %s"), PreviousFocusedWidget.IsValid() ? *PreviousFocusedWidget.Get()->GetName() : TEXT("Unknown"), CurrentFocusedWidget.IsValid() ? *CurrentFocusedWidget.Get()->GetName() : TEXT("Unknown"));
+    if (CurrentScope != nullptr)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Current Focus: %s"), CurrentScope->WidgetScopeFocusedElement != nullptr ? *CurrentScope->WidgetScopeFocusedElement->GetName() : TEXT("Null"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("There is no current scope to handle focus"));
+    }
+}
+
+UWidget* UNsUISubsystem::GetCurrentFocusedWidget() const
+{
+    return CurrentScope->WidgetScopeFocusedElement;
 }
 
 void UNsUISubsystem::HandleNavigate(const FVector2D& Direction)
@@ -269,7 +270,7 @@ void UNsUISubsystem::HandleNavigate(const FVector2D& Direction)
         return;
     }
 
-    if (!CurrentFocusedWidget.IsValid())
+    if (CurrentScope->WidgetScopeFocusedElement == nullptr)
     {
         return;
     }
@@ -280,31 +281,27 @@ void UNsUISubsystem::HandleNavigate(const FVector2D& Direction)
         UWidget* NextWidget = nullptr;
         switch (NavEnum)
         {
-            case EUINavigation::Up:    NextWidget = NavInt->Execute_GetUpNeighbor(CurrentFocusedWidget.Get());    break;
-            case EUINavigation::Down:  NextWidget = NavInt->Execute_GetDownNeighbor(CurrentFocusedWidget.Get());  break;
-            case EUINavigation::Left:  NextWidget = NavInt->Execute_GetLeftNeighbor(CurrentFocusedWidget.Get());  break;
-            case EUINavigation::Right: NextWidget = NavInt->Execute_GetRightNeighbor(CurrentFocusedWidget.Get()); break;
+            case EUINavigation::Up:    NextWidget = NavInt->Execute_GetUpNeighbor(CurrentScope->WidgetScopeFocusedElement);    break;
+            case EUINavigation::Down:  NextWidget = NavInt->Execute_GetDownNeighbor(CurrentScope->WidgetScopeFocusedElement);  break;
+            case EUINavigation::Left:  NextWidget = NavInt->Execute_GetLeftNeighbor(CurrentScope->WidgetScopeFocusedElement);  break;
+            case EUINavigation::Right: NextWidget = NavInt->Execute_GetRightNeighbor(CurrentScope->WidgetScopeFocusedElement); break;
             default: return;
         }
 
         // If the explicit pointer is non‐null, jump to it immediately:
-        if (NextWidget != nullptr && NextWidget->IsValidLowLevel() &&
-            NextWidget->IsInViewport())
+        if (NextWidget != nullptr && NextWidget->IsValidLowLevel() && NextWidget->IsInViewport())
         {
-            if (APlayerController* const PlayerController = NextWidget->GetOwningPlayer())
-            {
-                NextWidget->SetUserFocus(PlayerController);
-                NextWidget->SetKeyboardFocus();
-                CurrentFocusedWidget = NextWidget;
-                return;
-            }
+            CurrentScope->WidgetScopeFocusedElement = NextWidget;
+            SetCurrentFocusedWidget(NextWidget);
+            return;
         }
     }
 
     // Otherwise, fall back to the “spatial search”:
-    UWidget* const SpatialCandidate = FindBestNeighborBySpatialSearch(CurrentFocusedWidget.Get(), NavEnum);
+    UWidget* const SpatialCandidate = FindBestNeighborBySpatialSearch(CurrentScope->WidgetScopeFocusedElement, NavEnum);
     if (SpatialCandidate != nullptr && SpatialCandidate->IsValidLowLevel())
     {
+        CurrentScope->WidgetScopeFocusedElement = SpatialCandidate;
         SetCurrentFocusedWidget(SpatialCandidate);
     }
 }
@@ -323,7 +320,7 @@ bool UNsUISubsystem::HandleConfirm()
     }
 
     // Nothing focused -> nothing to do
-    UWidget* const Focused = CurrentFocusedWidget.Get();
+    UWidget* const Focused = CurrentScope->WidgetScopeFocusedElement;
     if (!Focused)
     {
         return false;
@@ -433,7 +430,7 @@ bool UNsUISubsystem::HandleConfirm()
     }
 
     // 4) Fallback to widget-level interface (your existing behavior)
-    if (const INsUINavigation* Nav = GetCurrentNavInterface())
+    if (const INsUINavigation* const Nav = GetCurrentNavInterface())
     {
         Nav->Execute_HandleUIConfirm(Focused);
         return true;
@@ -444,6 +441,7 @@ bool UNsUISubsystem::HandleConfirm()
 
 bool UNsUISubsystem::HandleCancel()
 {
+    // Actor selection mode takes precedence.
     if (bActorSelectionActive)
     {
         if (ActorFocusTargets.IsValidIndex(CurrentActorIndex))
@@ -454,26 +452,99 @@ bool UNsUISubsystem::HandleCancel()
         return true;
     }
 
-    if (UWidget* Widget = CurrentFocusedWidget.Get())
+    if (CurrentScope != nullptr)
     {
-        // Walk the registry: find the first entry whose class matches
-        for (const auto& Pair : CancelRegistry)
+        
+        if (CurrentScope->WidgetScopeFocusedElement == nullptr)
         {
-            if (Widget->IsA(Pair.Key))
+            return false;
+        }
+
+        // Helpers
+        auto IsInteractable = [](const UWidget* W) -> bool
+        {
+            return IsValid(W) && W->GetIsEnabled() && W->IsVisible();
+        };
+
+        auto TryExecuteCancelRegistry = [this](UWidget* W) -> bool
+        {
+            for (const auto& Pair : CancelRegistry)
             {
-                // Invoke that widget’s command
-                Pair.Value(Widget);
+                if (W && W->IsA(Pair.Key))
+                {
+                    Pair.Value(W);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        auto TryExecuteCancelInterface = [](UWidget* Scope) -> bool
+        {
+            if (Scope->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+            {
+                if (const INsUINavigation* const NavigationInterface = Cast<INsUINavigation>(Scope))
+                {
+                    NavigationInterface->Execute_HandleUICancel(Scope);
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        // 1) Focused widget first (cheap fast path).
+        if (IsInteractable(CurrentScope->WidgetScope) && TryExecuteCancelRegistry(CurrentScope->WidgetScope))
+        {
+            return true;
+        }
+
+        // 2) Bubble up ancestors *within the same layer scope* (Inventory should catch here).
+        UUserWidget* const LayerScope = CurrentScope->WidgetScope; // keeps us inside Static/Menu/Modal
+        for (UWidget* P = CurrentScope->WidgetScope->GetParent(); P; P = P->GetParent())
+        {
+            if (!IsInteractable(P))
+            {
+                continue;
+            }
+
+            if (TryExecuteCancelRegistry(P) || TryExecuteCancelInterface(P))
+            {
                 return true;
+            }
+
+            // Stop at the layer content boundary; do not bleed into other layers/layout.
+            if (P == LayerScope)
+            {
+                break;
             }
         }
 
-        // As a fallback, if the widget implements your own INsUINavigation, let it
-        // handle itself
-        if (const INsUINavigation* Nav = GetCurrentNavInterface())
+        // 3) As a last in-layer attempt, give the layer content root a chance (if not already hit).
+        if (LayerScope && LayerScope != CurrentScope->WidgetScope)
         {
-            Nav->Execute_HandleUICancel(Widget);
-            return true;
+            if (IsInteractable(LayerScope))
+            {
+                if (TryExecuteCancelRegistry(LayerScope) || TryExecuteCancelInterface(LayerScope))
+                {
+                    return true;
+                }
+            }
         }
+
+        // 4) Final fallback: current focused widget’s own interface (existing behavior).
+        if (CurrentScope->WidgetScope != nullptr)
+        {
+            if (CurrentScope->WidgetScope->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+            {
+                if (const INsUINavigation* Nav = Cast<INsUINavigation>(CurrentScope->WidgetScope))
+                {
+                    Nav->Execute_HandleUICancel(CurrentScope->WidgetScope);
+                    return true;
+                }
+            }
+        }
+        
     }
 
     return false;
@@ -504,10 +575,10 @@ UWidget* UNsUISubsystem::FindBestNeighborBySpatialSearch(UWidget* const InCurren
     FVector2D DesiredDirection(0, 0);
     switch (InNavDir)
     {
-        case EUINavigation::Up:    DesiredDirection = FVector2D(0, 1);  break;
-        case EUINavigation::Down:  DesiredDirection = FVector2D(0, -1); break;
-        case EUINavigation::Left:  DesiredDirection = FVector2D(-1, 0); break;
-        case EUINavigation::Right: DesiredDirection = FVector2D(1, 0);  break;
+        case EUINavigation::Up:    DesiredDirection = FVector2D( 0.f,  1.f); break;
+        case EUINavigation::Down:  DesiredDirection = FVector2D( 0.f, -1.f); break;
+        case EUINavigation::Left:  DesiredDirection = FVector2D(-1.f,  0.f); break;
+        case EUINavigation::Right: DesiredDirection = FVector2D( 1.f,  0.f); break;
         default: return InCurrentWidget; // unsupported navigation
     }
 
@@ -534,19 +605,18 @@ UWidget* UNsUISubsystem::FindBestNeighborBySpatialSearch(UWidget* const InCurren
 
     // If none found, relax to consider every candidate so navigation always
     // advances
-    if (ValidCandidates.Num() == 0)
-    {
-        for (UWidget* const Candidate : NavigableWidgets)
-        {
-            if (Candidate == nullptr)
-            {
-                continue;
-            }
-
-            const FVector2D CandidateCenter = GetWidgetCenterInViewport(Candidate);
-            ValidCandidates.Emplace(Candidate, CandidateCenter - CurrentCenter);
-        }
-    }
+    // if (ValidCandidates.Num() == 0)
+    // {
+    //     for (UWidget* const Candidate : NavigableWidgets)
+    //     {
+    //         if (Candidate == nullptr)
+    //         {
+    //             continue;
+    //         }
+    //         const FVector2D CandidateCenter = GetWidgetCenterInViewport(Candidate);
+    //         ValidCandidates.Emplace(Candidate, CandidateCenter - CurrentCenter);
+    //     }
+    // }
 
     if (ValidCandidates.Num() == 0)
     {
@@ -582,10 +652,10 @@ int32 UNsUISubsystem::FindBestActorBySpatialSearch(int32 CurrentIndex, EUINaviga
     FVector2D DesiredDirection(0.f, 0.f);
     switch (InNavDir)
     {
-        case EUINavigation::Up:    DesiredDirection = FVector2D(0.f, 1.f);  break;
-        case EUINavigation::Down:  DesiredDirection = FVector2D(0.f, -1.f); break;
-        case EUINavigation::Left:  DesiredDirection = FVector2D(-1.f, 0.f); break;
-        case EUINavigation::Right: DesiredDirection = FVector2D(1.f, 0.f);  break;
+        case EUINavigation::Up:    DesiredDirection = FVector2D( 0.f, -1.f); break;
+        case EUINavigation::Down:  DesiredDirection = FVector2D( 0.f,  1.f); break;
+        case EUINavigation::Left:  DesiredDirection = FVector2D(-1.f,  0.f); break;
+        case EUINavigation::Right: DesiredDirection = FVector2D( 1.f,  0.f); break;
         default: return CurrentIndex;
     }
 
@@ -732,6 +802,11 @@ void UNsUISubsystem::UpdateActorCursor()
     {
         CursorWidget->MoveToWidget(nullptr);
     }
+}
+
+UNsUIWidgetStackElement* UNsUISubsystem::GetCurrentScope()
+{
+    return CurrentScope;
 }
 
 FVector2D UNsUISubsystem::GetActorScreenCenter(const FNsUIActorFocusInfo& Info) const

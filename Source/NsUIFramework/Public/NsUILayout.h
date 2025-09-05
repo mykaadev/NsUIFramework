@@ -1,27 +1,15 @@
-// Copyright (C) 2024 mykaa. All rights reserved.
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "NsUILayer.h"
+#include "NsUILibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "NsUILayout.generated.h"
 
 /**
- * Enum used to define the layer type
- */
-UENUM(BlueprintType)
-enum class ENsUILayerType : uint8
-{
-    GameStatic         = 0,
-    GameMenu           = 1,
-    GameModal          = 2,
-    ApplicationStatic  = 3,
-    ApplicationMenu    = 4,
-    ApplicationModal   = 5
-};
-
-/**
- * Night Shift UI Layout
+ * Nulled Softworks UI Layout
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
@@ -45,11 +33,11 @@ public:
 
     /** Push content to layer */
     UFUNCTION(BlueprintCallable)
-    class UUserWidget* PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
+    class UNsUIWidgetStackElement* PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
 
     /** Pop content form layer */
     UFUNCTION(BlueprintCallable)
-    class UUserWidget* PopContentFromLayer(ENsUILayerType InLayerType);
+    class UNsUIWidgetStackElement* PopContentFromLayer(ENsUILayerType InLayerType);
 
     /** Clear all layers */
     UFUNCTION(BlueprintCallable)
@@ -59,7 +47,10 @@ public:
     UFUNCTION(BlueprintCallable)
     void ClearLayer(const ENsUILayerType InLayerType);
 
-// Variables
+    /** Find Invoker widget in this layout */
+    class UNsUIWidgetStackElement* FindInvokerWidgetInLayout(const class UNsUIWidgetStackElement* InWidget);
+
+    // Variables
 public:
 
     /** Any static elements present in the game (eg: prompts, time, navigation) */
