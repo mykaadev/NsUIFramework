@@ -452,14 +452,8 @@ bool UNsUISubsystem::HandleCancel()
         return true;
     }
 
-    if (CurrentScope != nullptr)
+    if (CurrentScope != nullptr && CurrentScope->WidgetScopeFocusedElement != nullptr)
     {
-        
-        if (CurrentScope->WidgetScopeFocusedElement == nullptr)
-        {
-            return false;
-        }
-
         // Helpers
         auto IsInteractable = [](const UWidget* W) -> bool
         {
