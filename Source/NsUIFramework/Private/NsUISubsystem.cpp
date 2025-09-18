@@ -8,12 +8,141 @@
 #include "GameFramework/PlayerController.h"
 #include "INsUINavigation.h"
 #include "Kismet/GameplayStatics.h"
+#include "Framework/Application/NavigationConfig.h"
+#include "Framework/Application/SlateApplication.h"
+#include "GenericPlatform/GenericApplication.h"
 #include "NsUICursor.h"
 #include "NsUILayout.h"
 #include "NsUILibrary.h"
 #include "NsUISettings.h"
 #include "NsUIWidget.h"
 #include "Stats/Stats.h"
+#include "Widgets/SWidget.h"
+#include "Input/Events.h"
+
+namespace
+{
+class FNsSlateNavigationConfig : public FNavigationConfig
+{
+public:
+    explicit FNsSlateNavigationConfig(TWeakObjectPtr<UNsUISubsystem> InSubsystem)
+        : Subsystem(InSubsystem)
+    {
+    }
+
+    virtual bool OnNavigation(const FKeyEvent& InKeyEvent, EUINavigation InNavigation) const override
+    {
+        if (UNsUISubsystem* const SubsystemPtr = Subsystem.Get())
+        {
+            if (SubsystemPtr->HandleNavigation(InNavigation))
+            {
+                return true;
+            }
+        }
+
+        return FNavigationConfig::OnNavigation(InKeyEvent, InNavigation);
+    }
+
+    virtual bool OnNavigation(const FNavigationEvent& InNavigationEvent, EUINavigation InNavigation) const override
+    {
+        if (UNsUISubsystem* const SubsystemPtr = Subsystem.Get())
+        {
+            if (SubsystemPtr->HandleNavigation(InNavigation))
+            {
+                return true;
+            }
+        }
+
+        return FNavigationConfig::OnNavigation(InNavigationEvent, InNavigation);
+    }
+
+    virtual bool OnNavigation(const FGeometry& MyGeometry, const FNavigationEvent& InNavigationEvent, EUINavigation InNavigation, const TSharedRef<SWidget>& NavigationSource) const override
+    {
+        if (UNsUISubsystem* const SubsystemPtr = Subsystem.Get())
+        {
+            if (SubsystemPtr->HandleNavigation(InNavigation))
+            {
+                return true;
+            }
+        }
+
+        return FNavigationConfig::OnNavigation(MyGeometry, InNavigationEvent, InNavigation, NavigationSource);
+    }
+
+    virtual bool OnNavigationAction(const FKeyEvent& InKeyEvent, EUINavigationAction Action) const override
+    {
+        if (UNsUISubsystem* const SubsystemPtr = Subsystem.Get())
+        {
+            if (HandleAction(*SubsystemPtr, Action))
+            {
+                return true;
+            }
+        }
+
+        return FNavigationConfig::OnNavigationAction(InKeyEvent, Action);
+    }
+
+    virtual bool OnNavigationAction(const FNavigationEvent& InNavigationEvent, EUINavigationAction Action) const override
+    {
+        if (UNsUISubsystem* const SubsystemPtr = Subsystem.Get())
+        {
+            if (HandleAction(*SubsystemPtr, Action))
+            {
+                return true;
+            }
+        }
+
+        return FNavigationConfig::OnNavigationAction(InNavigationEvent, Action);
+    }
+
+    virtual bool OnNavigationAction(const FGeometry& MyGeometry, const FNavigationEvent& InNavigationEvent, EUINavigationAction Action, const TSharedRef<SWidget>& NavigationSource) const override
+    {
+        if (UNsUISubsystem* const SubsystemPtr = Subsystem.Get())
+        {
+            if (HandleAction(*SubsystemPtr, Action))
+            {
+                return true;
+            }
+        }
+
+        return FNavigationConfig::OnNavigationAction(MyGeometry, InNavigationEvent, Action, NavigationSource);
+    }
+
+    virtual bool OnNavigationAnalog(const FGeometry& MyGeometry, const FNavigationEvent& InNavigationEvent, const TSharedRef<SWidget>& NavigationSource) const override
+    {
+        if (UNsUISubsystem* const SubsystemPtr = Subsystem.Get())
+        {
+            if (SubsystemPtr->HandleNavigation(InNavigationEvent.GetNavigationType()))
+            {
+                return true;
+            }
+        }
+
+        return FNavigationConfig::OnNavigationAnalog(MyGeometry, InNavigationEvent, NavigationSource);
+    }
+
+private:
+    static bool HandleAction(UNsUISubsystem& Subsystem, const EUINavigationAction Action)
+    {
+        switch (Action)
+        {
+            case EUINavigationAction::Accept:
+                return Subsystem.HandleConfirm();
+            case EUINavigationAction::Back:
+                return Subsystem.HandleCancel();
+            case EUINavigationAction::Menu:
+                Subsystem.HandleToggle();
+                return true;
+            default:
+                break;
+        }
+
+        return false;
+    }
+
+    TWeakObjectPtr<UNsUISubsystem> Subsystem;
+};
+}
 
 UNsUISubsystem::UNsUISubsystem()
     : CurrentActorIndex(INDEX_NONE)
@@ -26,10 +155,36 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
     Super::Initialize(Collection);
 
     InitializeCommandRegistry();
+
+    if (FSlateApplication::IsInitialized())
+    {
+        PreviousNavigationConfig = FSlateApplication::Get().GetNavigationConfig();
+        SlateNavigationConfig = MakeShared<FNsSlateNavigationConfig>(TWeakObjectPtr<UNsUISubsystem>(this));
+
+        if (SlateNavigationConfig.IsValid())
+        {
+            FSlateApplication::Get().SetNavigationConfig(SlateNavigationConfig.ToSharedRef());
+        }
+    }
 }
 
 void UNsUISubsystem::Deinitialize()
 {
+    if (FSlateApplication::IsInitialized())
+    {
+        if (PreviousNavigationConfig.IsValid())
+        {
+            FSlateApplication::Get().SetNavigationConfig(PreviousNavigationConfig.ToSharedRef());
+        }
+        else if (SlateNavigationConfig.IsValid())
+        {
+            FSlateApplication::Get().SetNavigationConfig(MakeShared<FNavigationConfig>());
+        }
+    }
+
+    SlateNavigationConfig.Reset();
+    PreviousNavigationConfig.Reset();
+
     if (CursorWidget != nullptr)
     {
         CursorWidget->RemoveFromParent();
@@ -148,7 +303,7 @@ UNsUILayout* UNsUISubsystem::GetActiveUILayout() const
 
 INsUINavigation* UNsUISubsystem::GetCurrentNavInterface() const
 {
-    if (CurrentScope->WidgetScopeFocusedElement != nullptr)
+    if (CurrentScope != nullptr && CurrentScope->WidgetScopeFocusedElement != nullptr)
     {
         if (CurrentScope->WidgetScopeFocusedElement->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
         {
@@ -199,8 +354,11 @@ void UNsUISubsystem::InitializeCommandRegistry()
 
 void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
 {
-    CursorWidget->InvalidateLayoutAndVolatility();
-    
+    if (CursorWidget != nullptr)
+    {
+        CursorWidget->InvalidateLayoutAndVolatility();
+    }
+
     if (InNewFocus != nullptr && InNewFocus->GetOwningPlayer() != nullptr)
     {
         // Actually request keyboard focus for that widget:
@@ -235,7 +393,79 @@ void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
 
 UWidget* UNsUISubsystem::GetCurrentFocusedWidget() const
 {
-    return CurrentScope->WidgetScopeFocusedElement;
+    return CurrentScope != nullptr ? CurrentScope->WidgetScopeFocusedElement : nullptr;
+}
+
+bool UNsUISubsystem::HandleNavigation(EUINavigation InNavigation)
+{
+    if (InNavigation == EUINavigation::Invalid)
+    {
+        return false;
+    }
+
+    if (bActorSelectionActive)
+    {
+        if (ActorFocusTargets.Num() == 0)
+        {
+            return false;
+        }
+
+        const int32 NextIndex = FindBestActorBySpatialSearch(CurrentActorIndex, InNavigation);
+        if (NextIndex != CurrentActorIndex)
+        {
+            CurrentActorIndex = NextIndex;
+            UpdateActorCursor();
+            return true;
+        }
+
+        return false;
+    }
+
+    if (CurrentScope == nullptr || CurrentScope->WidgetScopeFocusedElement == nullptr)
+    {
+        return false;
+    }
+
+    if (const INsUINavigation* const NavInt = GetCurrentNavInterface())
+    {
+        UWidget* NextWidget = nullptr;
+        switch (InNavigation)
+        {
+            case EUINavigation::Up:
+                NextWidget = NavInt->Execute_GetUpNeighbor(CurrentScope->WidgetScopeFocusedElement);
+                break;
+            case EUINavigation::Down:
+                NextWidget = NavInt->Execute_GetDownNeighbor(CurrentScope->WidgetScopeFocusedElement);
+                break;
+            case EUINavigation::Left:
+                NextWidget = NavInt->Execute_GetLeftNeighbor(CurrentScope->WidgetScopeFocusedElement);
+                break;
+            case EUINavigation::Right:
+                NextWidget = NavInt->Execute_GetRightNeighbor(CurrentScope->WidgetScopeFocusedElement);
+                break;
+            default:
+                break;
+        }
+
+        if (NextWidget != nullptr && NextWidget->IsValidLowLevel() && NextWidget->IsInViewport())
+        {
+            CurrentScope->WidgetScopeFocusedElement = NextWidget;
+            SetCurrentFocusedWidget(NextWidget);
+            return true;
+        }
+    }
+
+    if (UWidget* const SpatialCandidate = FindBestNeighborBySpatialSearch(CurrentScope->WidgetScopeFocusedElement, InNavigation))
+    {
+        if (SpatialCandidate->IsValidLowLevel())
+        {
+            CurrentScope->WidgetScopeFocusedElement = SpatialCandidate;
+            SetCurrentFocusedWidget(SpatialCandidate);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void UNsUISubsystem::HandleNavigate(const FVector2D& Direction)
@@ -253,56 +483,7 @@ void UNsUISubsystem::HandleNavigate(const FVector2D& Direction)
         return; // no meaningful direction
     }
 
-    if (bActorSelectionActive)
-    {
-        if (ActorFocusTargets.Num() == 0)
-        {
-            return;
-        }
-
-        const int32 NextIndex = FindBestActorBySpatialSearch(CurrentActorIndex, NavEnum);
-        if (NextIndex != CurrentActorIndex)
-        {
-            CurrentActorIndex = NextIndex;
-            UpdateActorCursor();
-        }
-        return;
-    }
-
-    if (CurrentScope->WidgetScopeFocusedElement == nullptr)
-    {
-        return;
-    }
-
-    // First, try the explicit neighbor pointer:
-    if (const INsUINavigation* const NavInt = GetCurrentNavInterface())
-    {
-        UWidget* NextWidget = nullptr;
-        switch (NavEnum)
-        {
-            case EUINavigation::Up:    NextWidget = NavInt->Execute_GetUpNeighbor(CurrentScope->WidgetScopeFocusedElement);    break;
-            case EUINavigation::Down:  NextWidget = NavInt->Execute_GetDownNeighbor(CurrentScope->WidgetScopeFocusedElement);  break;
-            case EUINavigation::Left:  NextWidget = NavInt->Execute_GetLeftNeighbor(CurrentScope->WidgetScopeFocusedElement);  break;
-            case EUINavigation::Right: NextWidget = NavInt->Execute_GetRightNeighbor(CurrentScope->WidgetScopeFocusedElement); break;
-            default: return;
-        }
-
-        // If the explicit pointer is non‐null, jump to it immediately:
-        if (NextWidget != nullptr && NextWidget->IsValidLowLevel() && NextWidget->IsInViewport())
-        {
-            CurrentScope->WidgetScopeFocusedElement = NextWidget;
-            SetCurrentFocusedWidget(NextWidget);
-            return;
-        }
-    }
-
-    // Otherwise, fall back to the “spatial search”:
-    UWidget* const SpatialCandidate = FindBestNeighborBySpatialSearch(CurrentScope->WidgetScopeFocusedElement, NavEnum);
-    if (SpatialCandidate != nullptr && SpatialCandidate->IsValidLowLevel())
-    {
-        CurrentScope->WidgetScopeFocusedElement = SpatialCandidate;
-        SetCurrentFocusedWidget(SpatialCandidate);
-    }
+    HandleNavigation(NavEnum);
 }
 
 bool UNsUISubsystem::HandleConfirm()
@@ -541,6 +722,55 @@ bool UNsUISubsystem::HandleCancel()
     }
 
     return false;
+}
+
+void UNsUISubsystem::ForwardKeyToSlate(const FKey& Key, EInputEvent EventType, bool bIsRepeat)
+{
+    if (!FSlateApplication::IsInitialized())
+    {
+        return;
+    }
+
+    const TSharedPtr<FGenericApplication> PlatformApp = FSlateApplication::Get().GetPlatformApplication();
+    const FModifierKeysState ModifierState = PlatformApp.IsValid() ? PlatformApp->GetModifierKeys() : FModifierKeysState();
+
+    const int32 UserIndex = 0;
+    const uint32 CharacterCode = 0;
+    const uint32 KeyCode = 0;
+
+    const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, bIsRepeat, CharacterCode, KeyCode);
+
+    switch (EventType)
+    {
+        case IE_Pressed:
+        case IE_Repeat:
+            FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
+            break;
+        case IE_Released:
+            FSlateApplication::Get().ProcessKeyUpEvent(KeyEvent);
+            break;
+        default:
+            break;
+    }
+}
+
+void UNsUISubsystem::ForwardAnalogToSlate(const FKey& Key, float AnalogValue, float AnalogDelta)
+{
+    UE_UNUSED(AnalogDelta);
+
+    if (!FSlateApplication::IsInitialized())
+    {
+        return;
+    }
+
+    const TSharedPtr<FGenericApplication> PlatformApp = FSlateApplication::Get().GetPlatformApplication();
+    const FModifierKeysState ModifierState = PlatformApp.IsValid() ? PlatformApp->GetModifierKeys() : FModifierKeysState();
+
+    const int32 UserIndex = 0;
+    const bool bIsRepeat = false;
+
+    const FAnalogInputEvent AnalogEvent(Key, ModifierState, UserIndex, bIsRepeat, AnalogValue);
+    FSlateApplication::Get().ProcessAnalogInputEvent(AnalogEvent);
 }
 
 UWidget* UNsUISubsystem::FindBestNeighborBySpatialSearch(UWidget* const InCurrentWidget, const EUINavigation InNavDir) const
