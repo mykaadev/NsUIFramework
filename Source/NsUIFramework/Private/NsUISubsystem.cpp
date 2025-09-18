@@ -269,7 +269,7 @@ void UNsUISubsystem::HandleNavigate(const FVector2D& Direction)
         return;
     }
 
-    if (CurrentScope->WidgetScopeFocusedElement == nullptr)
+    if (CurrentScope == nullptr || CurrentScope->WidgetScopeFocusedElement == nullptr)
     {
         return;
     }
@@ -318,121 +318,123 @@ bool UNsUISubsystem::HandleConfirm()
         return true;
     }
 
-    // Nothing focused -> nothing to do
-    UWidget* const Focused = CurrentScope->WidgetScopeFocusedElement;
-    if (!Focused)
+    if (CurrentScope != nullptr)
     {
-        return false;
-    }
-
-    // Helper: is this widget a viable target for confirm?
-    auto IsInteractable = [](const UWidget* W) -> bool
-    {
-        return IsValid(W) && W->GetIsEnabled() && W->IsVisible();
-    };
-
-    // Helper: does this widget match any entry in the confirm registry?
-    auto HasRegistryMatch = [this](const UWidget* W) -> bool
-    {
-        for (const auto& Pair : ConfirmRegistry)
+        UWidget* const Focused = CurrentScope->WidgetScopeFocusedElement;
+        if (!Focused)
         {
-            if (W && W->IsA(Pair.Key))
+            return false; // Nothing focused -> nothing to do
+        }
+
+        // Helper: is this widget a viable target for confirm?
+        auto IsInteractable = [](const UWidget* W) -> bool
+        {
+            return IsValid(W) && W->GetIsEnabled() && W->IsVisible();
+        };
+
+        // Helper: does this widget match any entry in the confirm registry?
+        auto HasRegistryMatch = [this](const UWidget* W) -> bool
+        {
+            for (const auto& Pair : ConfirmRegistry)
+            {
+                if (W && W->IsA(Pair.Key))
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Helper: execute the matching handler for W (first match in the current registry iteration order)
+        auto TryExecuteRegistry = [this](UWidget* W) -> bool
+        {
+            for (const auto& Pair : ConfirmRegistry)
+            {
+                if (W && W->IsA(Pair.Key))
+                {
+                    Pair.Value(W);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // 1) Direct hit on the focused widget
+        if (IsInteractable(Focused) && HasRegistryMatch(Focused))
+        {
+            if (TryExecuteRegistry(Focused))
             {
                 return true;
             }
         }
-        return false;
-    };
 
-    // Helper: execute the matching handler for W (first match in the current registry iteration order)
-    auto TryExecuteRegistry = [this](UWidget* W) -> bool
-    {
-        for (const auto& Pair : ConfirmRegistry)
+        // 2) BFS: search *descendants* of the focused widget (nearest-first)
         {
-            if (W && W->IsA(Pair.Key))
+            TQueue<UWidget*> Queue;
+
+            auto EnqueueChild = [&Queue](UWidget* Child)
             {
-                Pair.Value(W);
-                return true;
+                if (IsValid(Child)) { Queue.Enqueue(Child); }
+            };
+
+            auto EnqueueChildren = [&EnqueueChild](UWidget* W)
+            {
+                // Dive into nested UUserWidget content
+                if (UUserWidget* const UW = Cast<UUserWidget>(W))
+                {
+                    if (UW->WidgetTree && UW->WidgetTree->RootWidget)
+                    {
+                        EnqueueChild(UW->WidgetTree->RootWidget);
+                    }
+                }
+
+                // Panel/content widgets
+                if (UPanelWidget* const Panel = Cast<UPanelWidget>(W))
+                {
+                    const int32 Count = Panel->GetChildrenCount();
+                    for (int32 i = 0; i < Count; ++i)
+                    {
+                        EnqueueChild(Panel->GetChildAt(i));
+                    }
+                }
+            };
+
+            EnqueueChildren(Focused);
+
+            UWidget* Curr = nullptr;
+            while (Queue.Dequeue(Curr))
+            {
+                if (IsInteractable(Curr) && HasRegistryMatch(Curr))
+                {
+                    if (TryExecuteRegistry(Curr))
+                    {
+                        return true;
+                    }
+                }
+                EnqueueChildren(Curr);
             }
         }
-        return false;
-    };
 
-    // 1) Direct hit on the focused widget
-    if (IsInteractable(Focused) && HasRegistryMatch(Focused))
-    {
-        if (TryExecuteRegistry(Focused))
+        // 3) As a last local attempt, walk *ancestors* (in case the actionable lives above, e.g. a wrapper button)
         {
+            for (UWidget* P = Focused->GetParent(); P; P = P->GetParent())
+            {
+                if (IsInteractable(P) && HasRegistryMatch(P))
+                {
+                    if (TryExecuteRegistry(P))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 4) Fallback to widget-level interface (your existing behavior)
+        if (const INsUINavigation* const Nav = GetCurrentNavInterface())
+        {
+            Nav->Execute_HandleUIConfirm(Focused);
             return true;
         }
-    }
-
-    // 2) BFS: search *descendants* of the focused widget (nearest-first)
-    {
-        TQueue<UWidget*> Queue;
-
-        auto EnqueueChild = [&Queue](UWidget* Child)
-        {
-            if (IsValid(Child)) { Queue.Enqueue(Child); }
-        };
-
-        auto EnqueueChildren = [&EnqueueChild](UWidget* W)
-        {
-            // Dive into nested UUserWidget content
-            if (UUserWidget* const UW = Cast<UUserWidget>(W))
-            {
-                if (UW->WidgetTree && UW->WidgetTree->RootWidget)
-                {
-                    EnqueueChild(UW->WidgetTree->RootWidget);
-                }
-            }
-
-            // Panel/content widgets
-            if (UPanelWidget* const Panel = Cast<UPanelWidget>(W))
-            {
-                const int32 Count = Panel->GetChildrenCount();
-                for (int32 i = 0; i < Count; ++i)
-                {
-                    EnqueueChild(Panel->GetChildAt(i));
-                }
-            }
-        };
-
-        EnqueueChildren(Focused);
-
-        UWidget* Curr = nullptr;
-        while (Queue.Dequeue(Curr))
-        {
-            if (IsInteractable(Curr) && HasRegistryMatch(Curr))
-            {
-                if (TryExecuteRegistry(Curr))
-                {
-                    return true;
-                }
-            }
-            EnqueueChildren(Curr);
-        }
-    }
-
-    // 3) As a last local attempt, walk *ancestors* (in case the actionable lives above, e.g. a wrapper button)
-    {
-        for (UWidget* P = Focused->GetParent(); P; P = P->GetParent())
-        {
-            if (IsInteractable(P) && HasRegistryMatch(P))
-            {
-                if (TryExecuteRegistry(P))
-                {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // 4) Fallback to widget-level interface (your existing behavior)
-    if (const INsUINavigation* const Nav = GetCurrentNavInterface())
-    {
-        Nav->Execute_HandleUIConfirm(Focused);
-        return true;
     }
 
     return false;
