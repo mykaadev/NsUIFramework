@@ -58,8 +58,20 @@ UNsUIWidgetStackElement* UNsUILayout::PopContentFromLayer(const ENsUILayerType I
     {
         // if the layer stack is not empty, we can just keep swapping from widget to widget within that stack
         // if the layer stack is empty, we use the invoker info, now we have to return the focus to the original widget that pushed this one
-        
+
         UNsUIWidgetStackElement* TopElementOrInvokerInfo = FoundLayer->Pop();
+        ForceLayoutPrepass();
+        return FindInvokerWidgetInLayout(TopElementOrInvokerInfo);
+    }
+
+    return nullptr;
+}
+
+UNsUIWidgetStackElement* UNsUILayout::RemoveWidgetFromLayer(const ENsUILayerType InLayerType, UUserWidget* InWidget)
+{
+    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    {
+        UNsUIWidgetStackElement* TopElementOrInvokerInfo = FoundLayer->RemoveWidgetFromStack(InWidget);
         ForceLayoutPrepass();
         return FindInvokerWidgetInLayout(TopElementOrInvokerInfo);
     }

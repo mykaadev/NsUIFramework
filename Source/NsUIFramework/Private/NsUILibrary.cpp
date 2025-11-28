@@ -27,6 +27,14 @@ void UNsUILibrary::PopWidgetFromLayer(const ENsUILayerType InLayerType)
     }
 }
 
+void UNsUILibrary::RemoveWidgetFromLayer(const ENsUILayerType InLayerType, UUserWidget* InWidget)
+{
+    if (UNsUISubsystem* const UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->RemoveWidgetFromLayer(InLayerType, InWidget);
+    }
+}
+
 UUserWidget* UNsUILibrary::FindLayerContentRoot(UWidget* InWidget)
 {
     if (!IsValid(InWidget)) return nullptr;

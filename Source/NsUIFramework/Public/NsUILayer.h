@@ -30,6 +30,10 @@ public:
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* Pop();
 
+    /** Remove a specific widget from the stack, regardless of its position */
+    UFUNCTION(BlueprintCallable)
+    class UNsUIWidgetStackElement* RemoveWidgetFromStack(class UUserWidget* InWidget);
+
     /** Get Stack */
     UFUNCTION(BlueprintCallable)
     TArray<class UNsUIWidgetStackElement*> GetStack() const;

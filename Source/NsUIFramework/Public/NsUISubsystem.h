@@ -45,6 +45,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     void PopWidgetFromLayer(const ENsUILayerType InLayerType);
 
+    /** Remove a specific widget from a layer without popping blindly */
+    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
+    void RemoveWidgetFromLayer(const ENsUILayerType InLayerType, class UUserWidget* InWidget);
+
     /** Set Active UI Layout */
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     void SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& InLayout);

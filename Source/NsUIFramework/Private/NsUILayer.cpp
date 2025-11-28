@@ -95,6 +95,55 @@ UNsUIWidgetStackElement* UNsUILayer::Pop()
     return nullptr;
 }
 
+UNsUIWidgetStackElement* UNsUILayer::RemoveWidgetFromStack(UUserWidget* InWidget)
+{
+    if (!InWidget)
+    {
+        return Peek();
+    }
+
+    const int32 FoundIndex = Stack.IndexOfByPredicate([InWidget](const UNsUIWidgetStackElement* Element)
+    {
+        return Element != nullptr && Element->WidgetScope == InWidget;
+    });
+
+    if (FoundIndex != INDEX_NONE)
+    {
+        UNsUIWidgetStackElement* RemovedElement = Stack[FoundIndex];
+
+        if (RemovedElement != nullptr && RemovedElement->WidgetScope != nullptr)
+        {
+            RemovedElement->WidgetScope->RemoveFromParent();
+        }
+
+        Stack.RemoveAt(FoundIndex);
+
+        if (LayerRoot != nullptr)
+        {
+            LayerRoot->ClearChildren();
+        }
+
+        if (UNsUIWidgetStackElement* const NewTop = Peek())
+        {
+            if (NewTop->WidgetScope != nullptr)
+            {
+                NewTop->WidgetScope->SetVisibility(ESlateVisibility::Visible);
+
+                if (LayerRoot != nullptr)
+                {
+                    LayerRoot->AddChild(NewTop->WidgetScope);
+                }
+
+                return NewTop;
+            }
+        }
+
+        return RemovedElement;
+    }
+
+    return Peek();
+}
+
 TArray<UNsUIWidgetStackElement*> UNsUILayer::GetStack() const
 {
     return Stack;

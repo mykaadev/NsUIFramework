@@ -101,6 +101,22 @@ void UNsUISubsystem::PopWidgetFromLayer(const ENsUILayerType InLayerType)
     }
 }
 
+void UNsUISubsystem::RemoveWidgetFromLayer(const ENsUILayerType InLayerType, UUserWidget* InWidget)
+{
+    if (ActiveUILayout != nullptr)
+    {
+        CurrentScope = ActiveUILayout->RemoveWidgetFromLayer(InLayerType, InWidget);
+        if (CurrentScope != nullptr)
+        {
+            SetCurrentFocusedWidget(CurrentScope->WidgetScopeFocusedElement);
+        }
+        else
+        {
+            SetCurrentFocusedWidget(nullptr);
+        }
+    }
+}
+
 void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& InLayout)
 {
     APlayerController* const LocalPlayerController = UGameplayStatics::GetPlayerController(this, 0);

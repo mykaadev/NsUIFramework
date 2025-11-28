@@ -139,6 +139,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
     static void PopWidgetFromLayer(const ENsUILayerType InLayerType);
 
+    /** Remove a specific widget from a layer without popping blindly */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    static void RemoveWidgetFromLayer(const ENsUILayerType InLayerType, class UUserWidget* InWidget);
+
     /** Gather all navigable widgets inside another widget */
     UFUNCTION()
     static void GatherAllNavigableDescendants(const class UUserWidget* const InRootWidget, TArray<class UWidget*>& InOutNavigables);

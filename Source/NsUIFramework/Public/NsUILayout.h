@@ -39,6 +39,10 @@ public:
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* PopContentFromLayer(ENsUILayerType InLayerType);
 
+    /** Remove a specific widget from the given layer */
+    UFUNCTION(BlueprintCallable)
+    class UNsUIWidgetStackElement* RemoveWidgetFromLayer(ENsUILayerType InLayerType, class UUserWidget* InWidget);
+
     /** Clear all layers */
     UFUNCTION(BlueprintCallable)
     void ClearAllLayers() const;
