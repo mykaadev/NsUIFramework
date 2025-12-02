@@ -1,140 +1,104 @@
 // Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILayout.h"
-#include "Components/Overlay.h"
+
 #include "NsUILayer.h"
-#include "NsUILibrary.h"
 
 void UNsUILayout::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
 
-    RegisterLayer(ENsUILayerType::GameStatic, GameStaticLayer);
-    RegisterLayer(ENsUILayerType::GameMenu, GameMenuLayer);
-    RegisterLayer(ENsUILayerType::GameModal, GameModalLayer);
-    RegisterLayer(ENsUILayerType::ApplicationStatic, ApplicationStaticLayer);
-    RegisterLayer(ENsUILayerType::ApplicationMenu, ApplicationMenuLayer);
-    RegisterLayer(ENsUILayerType::ApplicationModal, ApplicationModalLayer);
-}
-
-void UNsUILayout::RegisterLayer(const ENsUILayerType InLayerType, class UNsUILayer* const InLayer)
-{
-    if (InLayer != nullptr && !RegisteredLayers.Contains(InLayerType))
+    if (GameStaticLayer)
     {
-        RegisteredLayers.Emplace(InLayerType, InLayer);
+        RegisterLayer(ENsUILayerType::GameStatic, GameStaticLayer);
+    }
+    if (GameMenuLayer)
+    {
+        RegisterLayer(ENsUILayerType::GameMenu, GameMenuLayer);
+    }
+    if (GameModalLayer)
+    {
+        RegisterLayer(ENsUILayerType::GameModal, GameModalLayer);
+    }
+    if (ApplicationStaticLayer)
+    {
+        RegisterLayer(ENsUILayerType::ApplicationStatic, ApplicationStaticLayer);
+    }
+    if (ApplicationMenuLayer)
+    {
+        RegisterLayer(ENsUILayerType::ApplicationMenu, ApplicationMenuLayer);
+    }
+    if (ApplicationModalLayer)
+    {
+        RegisterLayer(ENsUILayerType::ApplicationModal, ApplicationModalLayer);
     }
 }
 
-bool UNsUILayout::UnregisterLayer(const ENsUILayerType InLayerType)
+void UNsUILayout::RegisterLayer(ENsUILayerType InLayerType, UNsUILayer* InLayer)
 {
-    if ( UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (!InLayer)
     {
-        FoundLayer->RemoveFromParent();
+        return;
     }
+    RegisteredLayers.Add(InLayerType, InLayer);
+}
 
+bool UNsUILayout::UnregisterLayer(ENsUILayerType InLayerType)
+{
     return RegisteredLayers.Remove(InLayerType) > 0;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass)
+UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass)
 {
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        if (UNsUIWidgetStackElement* Content = FoundLayer->Push(InWidgetClass))
-        {
-            ForceLayoutPrepass();
-            // The new content that was just pushed
-            Content->WidgetScopeLayerType = InLayerType; // fill the layer where he belongs to
-            return Content;
-        }
+        return (*FoundLayer)->Push(InWidgetClass);
     }
-
-
     return nullptr;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::ReplaceTopWidgetOnLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass)
+UNsUIWidgetStackElement* UNsUILayout::ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass)
 {
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        if (UNsUIWidgetStackElement* Content = FoundLayer->ReplaceTop(InWidgetClass))
-        {
-            ForceLayoutPrepass();
-            Content->WidgetScopeLayerType = InLayerType;
-            return Content;
-        }
+        return (*FoundLayer)->ReplaceTop(InWidgetClass);
     }
-
     return nullptr;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::PopContentFromLayer(const ENsUILayerType InLayerType)
+UNsUIWidgetStackElement* UNsUILayout::PopContentFromLayer(ENsUILayerType InLayerType)
 {
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        // if the layer stack is not empty, we can just keep swapping from widget to widget within that stack
-        // if the layer stack is empty, we use the invoker info, now we have to return the focus to the original widget that pushed this one
-
-        UNsUIWidgetStackElement* TopElementOrInvokerInfo = FoundLayer->Pop();
-        ForceLayoutPrepass();
-        return FindInvokerWidgetInLayout(TopElementOrInvokerInfo);
+        return (*FoundLayer)->Pop();
     }
-
     return nullptr;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::RemoveWidgetFromLayer(const ENsUILayerType InLayerType, UUserWidget* InWidget)
+UNsUIWidgetStackElement* UNsUILayout::RemoveWidgetFromLayer(ENsUILayerType InLayerType, UUserWidget* InWidget)
 {
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        UNsUIWidgetStackElement* TopElementOrInvokerInfo = FoundLayer->RemoveWidgetFromStack(InWidget);
-        ForceLayoutPrepass();
-        return FindInvokerWidgetInLayout(TopElementOrInvokerInfo);
+        return (*FoundLayer)->RemoveWidgetFromStack(InWidget);
     }
-
     return nullptr;
+}
+
+void UNsUILayout::ClearLayer(ENsUILayerType InLayerType)
+{
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
+    {
+        (*FoundLayer)->ClearStack();
+    }
 }
 
 void UNsUILayout::ClearAllLayers() const
 {
-    TArray<UNsUILayer*> InOutLayers; RegisteredLayers.GenerateValueArray(InOutLayers);
-    for (UNsUILayer* const Layer : InOutLayers)
+    for (const TPair<ENsUILayerType, UNsUILayer*>& Pair : RegisteredLayers)
     {
-        if (Layer != nullptr)
+        if (Pair.Value)
         {
-            Layer->ClearStack();
+            Pair.Value->ClearStack();
         }
     }
-}
-
-void UNsUILayout::ClearLayer(const ENsUILayerType InLayerType)
-{
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
-    {
-        FoundLayer->ClearStack();
-    }
-}
-
-UNsUIWidgetStackElement* UNsUILayout::FindInvokerWidgetInLayout(const UNsUIWidgetStackElement* InWidget)
-{
-    if (InWidget != nullptr)
-    {
-        // if this widget was pushed from other widget within or the same layer or not
-        if (InWidget->InvokerWidgetScope != nullptr && InWidget->InvokerElement != nullptr)
-        {
-            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->InvokerLayerType))
-            {
-                return FoundLayer->FindStackElement(InWidget->InvokerWidgetScope, InWidget->InvokerElement);
-            }     
-        } // if the widget does not have an invoker (could be the first widget summoned to the layer) we retrieve it again
-        else if (InWidget->WidgetScope != nullptr && InWidget->WidgetScopeFocusedElement != nullptr)
-        {
-            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->WidgetScopeLayerType))
-            {
-                return FoundLayer->FindStackElement(InWidget->WidgetScope, InWidget->WidgetScopeFocusedElement);
-            }     
-        }
-       
-    }
-
-    return nullptr;
 }

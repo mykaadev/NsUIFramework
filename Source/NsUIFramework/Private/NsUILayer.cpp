@@ -1,304 +1,151 @@
 // Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILayer.h"
-#include "INsUINavigation.h"
-#include "NsUISubsystem.h"
-#include "Blueprint/UserWidget.h"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
-#include "Components/TextBlock.h"
+#include "NsUILibrary.h"
+#include "NsUISubsystem.h"
+#include "NsUIWidget.h"
 
 void UNsUILayer::NativeConstruct()
 {
     Super::NativeConstruct();
+    Stack.Empty();
+}
 
-    if (LayerRoot == nullptr)
+UNsUIWidgetStackElement* UNsUILayer::CreateStackElement(UUserWidget* Widget) const
+{
+    if (!Widget)
     {
-        LayerRoot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("RootBorder"));
-        LayerRoot->SetPadding(FMargin(0.f));
-        LayerRoot->SetBrushColor(FLinearColor::Transparent);
-        LayerRoot->SetHorizontalAlignment(HAlign_Fill);
-        LayerRoot->SetVerticalAlignment(VAlign_Fill);
+        return nullptr;
+    }
 
-        WidgetTree->RootWidget = LayerRoot;
+    UNsUIWidgetStackElement* Element = NewObject<UNsUIWidgetStackElement>(Widget);
+    Element->Widget = Widget;
+    Element->Layer = ENsUILayerType::None;
+    return Element;
+}
 
-        const auto Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("DebugText"));
-        Text->SetText(FText::FromString(TEXT("Hello, world!")));
-        LayerRoot->SetContent(Text);
+void UNsUILayer::HideCurrentTop()
+{
+    if (UNsUIWidgetStackElement* Top = Peek())
+    {
+        Top->Widget->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+
+void UNsUILayer::ShowCurrentTop()
+{
+    if (UNsUIWidgetStackElement* Top = Peek())
+    {
+        Top->Widget->SetVisibility(ESlateVisibility::Visible);
+        Top->Widget->SetKeyboardFocus();
     }
 }
 
 UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InClass)
 {
-    UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem();
-    if (LayerRoot != nullptr && InClass != nullptr && UISubsystem != nullptr)
+    APlayerController* OwningPlayer = GetOwningPlayer();
+    if (!OwningPlayer || !LayerRoot)
     {
-        if (APlayerController* const OwningPlayer = GetOwningPlayer())
-        {
-            if (UUserWidget* const NewWidget = CreateWidget(OwningPlayer, InClass.LoadSynchronous()))
-            {
-                // run push logic from the interface
-                PushWidget(NewWidget);
-
-                // create new stack element
-                UNsUIWidgetStackElement* NewStackElement = NewObject<UNsUIWidgetStackElement>(OwningPlayer);
-                NewStackElement->WidgetScope = NewWidget;
-                NewStackElement->WidgetScopeFocusedElement = GetInitialFocusForWidget(NewWidget);
-                NewStackElement->InvokerWidgetScope = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScope : nullptr;
-                NewStackElement->InvokerElement = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScopeFocusedElement : nullptr;
-                NewStackElement->InvokerLayerType = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScopeLayerType : ENsUILayerType::None;
-                
-                // handle the push to the layer
-                CollapseTop();                      // hide the current top element
-                LayerRoot->ClearChildren();         // clear the root
-                Stack.Emplace(NewStackElement);     // add new element to stack
-                LayerRoot->AddChild(NewWidget);     // push it to the root
-                ShowTop();                          // show the new element on top of the stack
-                return Peek();                      // Peek() now gives us this new element
-            }
-        }
+        return nullptr;
     }
 
-    return nullptr;
+    UClass* WidgetClass = InClass.LoadSynchronous();
+    if (!WidgetClass)
+    {
+        return nullptr;
+    }
+
+    UUserWidget* NewWidget = CreateWidget<UUserWidget>(OwningPlayer, WidgetClass);
+    if (!NewWidget)
+    {
+        return nullptr;
+    }
+
+    HideCurrentTop();
+    LayerRoot->SetContent(NewWidget);
+
+    UNsUIWidgetStackElement* Element = CreateStackElement(NewWidget);
+    Stack.Add(Element);
+    ShowCurrentTop();
+    return Element;
 }
 
 UNsUIWidgetStackElement* UNsUILayer::ReplaceTop(const TSoftClassPtr<UUserWidget>& InClass)
 {
-    UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem();
-    if (LayerRoot != nullptr && InClass != nullptr && UISubsystem != nullptr)
-    {
-        if (APlayerController* const OwningPlayer = GetOwningPlayer())
-        {
-            if (UUserWidget* const NewWidget = CreateWidget(OwningPlayer, InClass.LoadSynchronous()))
-            {
-                UNsUIWidgetStackElement* const PreviousTop = Peek();
-
-                // run push logic from the interface
-                PushWidget(NewWidget);
-
-                // create new stack element
-                UNsUIWidgetStackElement* NewStackElement = NewObject<UNsUIWidgetStackElement>(OwningPlayer);
-                const UNsUIWidgetStackElement* const SourceInvoker = PreviousTop != nullptr ? PreviousTop : UISubsystem->GetCurrentScope();
-
-                NewStackElement->WidgetScope = NewWidget;
-                NewStackElement->WidgetScopeFocusedElement = GetInitialFocusForWidget(NewWidget);
-                NewStackElement->InvokerWidgetScope = SourceInvoker != nullptr ? SourceInvoker->WidgetScope : nullptr;
-                NewStackElement->InvokerElement = SourceInvoker != nullptr ? SourceInvoker->WidgetScopeFocusedElement : nullptr;
-                NewStackElement->InvokerLayerType = SourceInvoker != nullptr ? SourceInvoker->WidgetScopeLayerType : ENsUILayerType::None;
-
-                // remove previous top without disturbing deeper elements
-                if (!Stack.IsEmpty())
-                {
-                    if (UNsUIWidgetStackElement* const CurrentTop = Stack.Last())
-                    {
-                        if (CurrentTop->WidgetScope != nullptr)
-                        {
-                            CurrentTop->WidgetScope->RemoveFromParent();
-                        }
-                    }
-
-                    Stack.Pop();
-                }
-
-                LayerRoot->ClearChildren();
-                Stack.Emplace(NewStackElement);
-                LayerRoot->AddChild(NewWidget);
-                ShowTop();
-                return Peek();
-            }
-        }
-    }
-
-    return Peek();
+    Pop();
+    return Push(InClass);
 }
 
 UNsUIWidgetStackElement* UNsUILayer::Pop()
 {
-    if (!Stack.IsEmpty())
+    if (Stack.Num() == 0)
     {
-        // Pop the top widget out of the stack
-        UNsUIWidgetStackElement* TopElement = Peek();
-        if (TopElement != nullptr && TopElement->WidgetScope != nullptr && LayerRoot != nullptr)
-        {
-            UNsUIWidgetStackElement* CachedInfoInvoker = TopElement;
-
-            // Remove the current widget
-            TopElement->WidgetScope->RemoveFromParent();
-            Stack.Remove(TopElement);
-            LayerRoot->ClearChildren();
-
-            // Enable the one that is now on the top of the stack
-            TopElement = Peek();
-            if (TopElement != nullptr && TopElement->WidgetScope != nullptr)
-            {
-                TopElement->WidgetScope->SetVisibility(ESlateVisibility::Visible);
-                LayerRoot->AddChild(TopElement->WidgetScope);
-                return TopElement;
-            }
-            else // we don't have any more widgets in this layer so we must pass the invoker info to the layout so he can handle it
-            {
-                return CachedInfoInvoker;
-            }
-        }
+        return nullptr;
     }
 
-    return nullptr;
+    UNsUIWidgetStackElement* Removed = Stack.Pop();
+    if (Removed && Removed->Widget)
+    {
+        Removed->Widget->RemoveFromParent();
+    }
+
+    ShowCurrentTop();
+    return Removed;
 }
 
 UNsUIWidgetStackElement* UNsUILayer::RemoveWidgetFromStack(UUserWidget* InWidget)
 {
     if (!InWidget)
     {
-        return Peek();
+        return nullptr;
     }
 
-    const int32 FoundIndex = Stack.IndexOfByPredicate([InWidget](const UNsUIWidgetStackElement* Element)
+    const int32 Index = Stack.IndexOfByPredicate([InWidget](const UNsUIWidgetStackElement* Element)
     {
-        return Element != nullptr && Element->WidgetScope == InWidget;
+        return Element && Element->Widget == InWidget;
     });
 
-    if (FoundIndex != INDEX_NONE)
+    if (Index == INDEX_NONE)
     {
-        UNsUIWidgetStackElement* RemovedElement = Stack[FoundIndex];
-
-        if (RemovedElement != nullptr && RemovedElement->WidgetScope != nullptr)
-        {
-            RemovedElement->WidgetScope->RemoveFromParent();
-        }
-
-        Stack.RemoveAt(FoundIndex);
-
-        if (LayerRoot != nullptr)
-        {
-            LayerRoot->ClearChildren();
-        }
-
-        if (UNsUIWidgetStackElement* const NewTop = Peek())
-        {
-            if (NewTop->WidgetScope != nullptr)
-            {
-                NewTop->WidgetScope->SetVisibility(ESlateVisibility::Visible);
-
-                if (LayerRoot != nullptr)
-                {
-                    LayerRoot->AddChild(NewTop->WidgetScope);
-                }
-
-                return NewTop;
-            }
-        }
-
-        return RemovedElement;
+        return nullptr;
     }
 
-    return Peek();
-}
+    UNsUIWidgetStackElement* Removed = Stack[Index];
+    Stack.RemoveAt(Index);
 
-TArray<UNsUIWidgetStackElement*> UNsUILayer::GetStack() const
-{
-    return Stack;
+    if (Removed && Removed->Widget)
+    {
+        Removed->Widget->RemoveFromParent();
+    }
+
+    if (Index == Stack.Num())
+    {
+        ShowCurrentTop();
+    }
+
+    return Removed;
 }
 
 void UNsUILayer::ClearStack()
 {
-    for (UNsUIWidgetStackElement* StackElement : Stack)
+    for (UNsUIWidgetStackElement* Element : Stack)
     {
-        if (StackElement->WidgetScope != nullptr)
+        if (Element && Element->Widget)
         {
-            StackElement->WidgetScope->RemoveFromParent();
+            Element->Widget->RemoveFromParent();
         }
     }
-
     Stack.Empty();
-
-    if (LayerRoot != nullptr)
+    if (LayerRoot)
     {
-        LayerRoot->ClearChildren();
+        LayerRoot->SetContent(nullptr);
     }
 }
 
 UNsUIWidgetStackElement* UNsUILayer::Peek()
 {
-    return !Stack.IsEmpty() ? Stack.Last() : nullptr;
-}
-
-void UNsUILayer::CollapseTop()
-{
-    if (UNsUIWidgetStackElement* TopElement = Peek())
-    {
-        if (TopElement->WidgetScope != nullptr)
-        {
-            TopElement->WidgetScope->SetVisibility(ESlateVisibility::Collapsed);
-        }
-    }
-}
-
-void UNsUILayer::ShowTop()
-{
-    if (UNsUIWidgetStackElement* const TopElement = Peek())
-    {
-        if (TopElement->WidgetScope != nullptr)
-        {
-            TopElement->WidgetScope->SetVisibility(ESlateVisibility::Visible);
-        }
-    }
-}
-
-UNsUIWidgetStackElement* UNsUILayer::FindStackElement(const UUserWidget* InInvokerScope, const UWidget* InInvokerElement)
-{
-    for (int32 Index = Stack.Num() - 1; Index >= 0; --Index)
-    {
-        if (Stack[Index] != nullptr)
-        {
-            if (Stack[Index]->WidgetScope == InInvokerScope && Stack[Index]->WidgetScopeFocusedElement == InInvokerElement)
-            {
-                return Stack[Index];
-            }
-        }
-    }
-
-    return nullptr;
-}
-
-FText UNsUILayer::GetStackListNames()
-{
-    TArray<FString> StackListNames;
-
-    for (int32 Index = Stack.Num() - 1; Index >= 0; --Index)
-    {
-        if (Stack[Index]->WidgetScope != nullptr)
-        {
-            StackListNames.Emplace(Stack[Index]->WidgetScope->GetName());
-        }
-    }
-
-    return FText::FromString(FString::Join(StackListNames, TEXT("\n")));
-}
-
-UWidget* UNsUILayer::GetInitialFocusForWidget(UUserWidget* InWidget)
-{
-    if (InWidget != nullptr &&
-        InWidget->GetClass() != nullptr &&
-        InWidget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
-    {
-        if (const INsUINavigation* const NavigationInterface = Cast<INsUINavigation>(InWidget))
-        {
-            return NavigationInterface->Execute_GetInitialFocusWidget(InWidget);
-        }
-    }
-
-    return nullptr;
-}
-
-void UNsUILayer::PushWidget(UUserWidget* InWidget)
-{
-    if (InWidget != nullptr &&
-        InWidget->GetClass() != nullptr &&
-        InWidget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
-    {
-        if (const INsUINavigation* const NavigationInterface = Cast<INsUINavigation>(InWidget))
-        {
-            NavigationInterface->Execute_OnWidgetPushed(InWidget);
-        }
-    }
+    return Stack.Num() > 0 ? Stack.Last() : nullptr;
 }

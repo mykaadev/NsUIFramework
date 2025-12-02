@@ -3,30 +3,26 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NsUILibrary.h"
 #include "Blueprint/UserWidget.h"
+#include "NsUILibrary.h"
 #include "NsUILayer.generated.h"
 
 /**
- * Nulled Softworks UI Layer
+ * Simple UI Layer that owns a stack of widgets.
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayer : public UUserWidget
 {
     GENERATED_BODY()
 
-// Functions
 public:
-
-    //~ Begin UUserWidget Interface
     virtual void NativeConstruct() override;
-    //~ End UUserWidget Interface
 
     /** Push content */
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* Push(const TSoftClassPtr<class UUserWidget>& InClass);
 
-    /** Replace the current top widget with a new one without altering deeper stack entries */
+    /** Replace the current top widget with a new one */
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* ReplaceTop(const TSoftClassPtr<class UUserWidget>& InClass);
 
@@ -34,13 +30,9 @@ public:
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* Pop();
 
-    /** Remove a specific widget from the stack, regardless of its position */
+    /** Remove a specific widget from the stack */
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* RemoveWidgetFromStack(class UUserWidget* InWidget);
-
-    /** Get Stack */
-    UFUNCTION(BlueprintCallable)
-    TArray<class UNsUIWidgetStackElement*> GetStack() const;
 
     /** Clear stack */
     UFUNCTION(BlueprintCallable)
@@ -50,42 +42,20 @@ public:
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* Peek();
 
-    /** Collapse top widget */
+    /** Get Stack */
     UFUNCTION(BlueprintCallable)
-    void CollapseTop();
-
-    /** Show top widget*/
-    UFUNCTION(BlueprintCallable)
-    void ShowTop();
-
-    /** Find Stack Element */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* FindStackElement(const UUserWidget* InInvokerScope, const UWidget* InInvokerElement);
-
-    /** Get stack list names */
-    UFUNCTION(BlueprintCallable)
-    FText GetStackListNames();
-
-    /** Gets the initial focus for a widget */
-    UFUNCTION(BlueprintCallable)
-    class UWidget* GetInitialFocusForWidget(class UUserWidget* InWidget);
+    TArray<class UNsUIWidgetStackElement*> GetStack() const { return Stack; }
 
 private:
+    void HideCurrentTop();
+    void ShowCurrentTop();
+    UNsUIWidgetStackElement* CreateStackElement(UUserWidget* Widget) const;
 
-    /** Handles the push functionality of the widget when it implements our interface */
-    UFUNCTION()
-    void PushWidget(class UUserWidget* InWidget);
-
-// Variables
 public:
-
-    /** Border that contains our widget */
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<class UBorder> LayerRoot;
 
 protected:
-
-    /** Widget Stack */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     TArray<class UNsUIWidgetStackElement*> Stack;
 };
