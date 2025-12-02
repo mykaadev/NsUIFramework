@@ -84,6 +84,25 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<class UUserWi
     return nullptr;
 }
 
+UUserWidget* UNsUISubsystem::ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType)
+{
+    if (ActiveUILayout != nullptr)
+    {
+        CurrentScope = ActiveUILayout->ReplaceTopWidgetOnLayer(InLayerType, InWidget);
+        if (CurrentScope != nullptr)
+        {
+            SetCurrentFocusedWidget(CurrentScope->WidgetScopeFocusedElement);
+            return CurrentScope->WidgetScope;
+        }
+        else
+        {
+            SetCurrentFocusedWidget(nullptr);
+        }
+    }
+
+    return nullptr;
+}
+
 void UNsUISubsystem::PopWidgetFromLayer(const ENsUILayerType InLayerType)
 {
     if (ActiveUILayout != nullptr)

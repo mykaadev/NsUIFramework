@@ -58,8 +58,58 @@ UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InCl
             }
         }
     }
-    
+
     return nullptr;
+}
+
+UNsUIWidgetStackElement* UNsUILayer::ReplaceTop(const TSoftClassPtr<UUserWidget>& InClass)
+{
+    UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem();
+    if (LayerRoot != nullptr && InClass != nullptr && UISubsystem != nullptr)
+    {
+        if (APlayerController* const OwningPlayer = GetOwningPlayer())
+        {
+            if (UUserWidget* const NewWidget = CreateWidget(OwningPlayer, InClass.LoadSynchronous()))
+            {
+                UNsUIWidgetStackElement* const PreviousTop = Peek();
+
+                // run push logic from the interface
+                PushWidget(NewWidget);
+
+                // create new stack element
+                UNsUIWidgetStackElement* NewStackElement = NewObject<UNsUIWidgetStackElement>(OwningPlayer);
+                const UNsUIWidgetStackElement* const SourceInvoker = PreviousTop != nullptr ? PreviousTop : UISubsystem->GetCurrentScope();
+
+                NewStackElement->WidgetScope = NewWidget;
+                NewStackElement->WidgetScopeFocusedElement = GetInitialFocusForWidget(NewWidget);
+                NewStackElement->InvokerWidgetScope = SourceInvoker != nullptr ? SourceInvoker->WidgetScope : nullptr;
+                NewStackElement->InvokerElement = SourceInvoker != nullptr ? SourceInvoker->WidgetScopeFocusedElement : nullptr;
+                NewStackElement->InvokerLayerType = SourceInvoker != nullptr ? SourceInvoker->WidgetScopeLayerType : ENsUILayerType::None;
+
+                // remove previous top without disturbing deeper elements
+                if (!Stack.IsEmpty())
+                {
+                    if (UNsUIWidgetStackElement* const CurrentTop = Stack.Last())
+                    {
+                        if (CurrentTop->WidgetScope != nullptr)
+                        {
+                            CurrentTop->WidgetScope->RemoveFromParent();
+                        }
+                    }
+
+                    Stack.Pop();
+                }
+
+                LayerRoot->ClearChildren();
+                Stack.Emplace(NewStackElement);
+                LayerRoot->AddChild(NewWidget);
+                ShowTop();
+                return Peek();
+            }
+        }
+    }
+
+    return Peek();
 }
 
 UNsUIWidgetStackElement* UNsUILayer::Pop()

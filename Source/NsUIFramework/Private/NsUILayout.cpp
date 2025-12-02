@@ -48,7 +48,22 @@ UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(const ENsUILayerType In
         }
     }
 
-    
+
+    return nullptr;
+}
+
+UNsUIWidgetStackElement* UNsUILayout::ReplaceTopWidgetOnLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass)
+{
+    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    {
+        if (UNsUIWidgetStackElement* Content = FoundLayer->ReplaceTop(InWidgetClass))
+        {
+            ForceLayoutPrepass();
+            Content->WidgetScopeLayerType = InLayerType;
+            return Content;
+        }
+    }
+
     return nullptr;
 }
 

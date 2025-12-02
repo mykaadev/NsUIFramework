@@ -135,6 +135,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
     static class UUserWidget* AddWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
 
+    /** Replace the top widget on a layer without manually popping first */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    static class UUserWidget* ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
+
     /** Pop widget from layer */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
     static void PopWidgetFromLayer(const ENsUILayerType InLayerType);

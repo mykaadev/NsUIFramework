@@ -41,6 +41,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     class UUserWidget* PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
 
+    /** Replace the top widget on the given layer */
+    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
+    class UUserWidget* ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
+
     /** Pop widget to layer */
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     void PopWidgetFromLayer(const ENsUILayerType InLayerType);

@@ -35,6 +35,10 @@ public:
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
 
+    /** Replace the top widget in a layer without changing deeper history */
+    UFUNCTION(BlueprintCallable)
+    class UNsUIWidgetStackElement* ReplaceTopWidgetOnLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
+
     /** Pop content form layer */
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* PopContentFromLayer(ENsUILayerType InLayerType);

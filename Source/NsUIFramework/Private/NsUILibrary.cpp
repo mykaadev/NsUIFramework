@@ -19,6 +19,16 @@ UUserWidget* UNsUILibrary::AddWidgetToLayer(const TSoftClassPtr<class UUserWidge
     return nullptr;
 }
 
+UUserWidget* UNsUILibrary::ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType)
+{
+    if (UNsUISubsystem* const UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        return UISubsystem->ReplaceTopWidgetOnLayer(InWidget, InLayerType);
+    }
+
+    return nullptr;
+}
+
 void UNsUILibrary::PopWidgetFromLayer(const ENsUILayerType InLayerType)
 {
     if (UNsUISubsystem* const UISubsystem = UNsUISubsystem::GetSubsystem())

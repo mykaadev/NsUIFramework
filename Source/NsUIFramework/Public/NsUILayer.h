@@ -26,6 +26,10 @@ public:
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* Push(const TSoftClassPtr<class UUserWidget>& InClass);
 
+    /** Replace the current top widget with a new one without altering deeper stack entries */
+    UFUNCTION(BlueprintCallable)
+    class UNsUIWidgetStackElement* ReplaceTop(const TSoftClassPtr<class UUserWidget>& InClass);
+
     /** Pop content */
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* Pop();
