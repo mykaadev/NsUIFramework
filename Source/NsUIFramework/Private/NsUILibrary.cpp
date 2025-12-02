@@ -18,11 +18,11 @@ UUserWidget* UNsUILibrary::AddWidgetToLayer(const TSoftClassPtr<UUserWidget>& In
     return nullptr;
 }
 
-UUserWidget* UNsUILibrary::ReplaceTopWidgetOnLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType)
+UUserWidget* UNsUILibrary::ReplaceTopWidgetOnLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious)
 {
     if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
     {
-        return UISubsystem->ReplaceTopWidgetOnLayer(InWidget, InLayerType);
+        return UISubsystem->ReplaceTopWidgetOnLayer(InWidget, InLayerType, bCollapsePrevious);
     }
     return nullptr;
 }
@@ -67,6 +67,72 @@ UUserWidget* UNsUILibrary::ApplyLayerTransition(const FNsUILayerTransitionReques
         {
             return Result->Widget.Get();
         }
+    }
+    return nullptr;
+}
+
+void UNsUILibrary::SetActiveLayout(const TSoftClassPtr<UNsUILayout>& InLayoutClass)
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->SetActiveUILayout(InLayoutClass);
+    }
+}
+
+void UNsUILibrary::SetRetroCursorClass(const TSoftClassPtr<UNsUICursor>& InCursorClass)
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->SetRetroCursorClass(InCursorClass);
+    }
+}
+
+void UNsUILibrary::MoveRetroCursorToWidget(UWidget* TargetWidget)
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->MoveRetroCursorToWidget(TargetWidget);
+    }
+}
+
+void UNsUILibrary::MoveRetroCursorToScreenPosition(const FVector2D& ScreenPosition)
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->MoveRetroCursorToScreenPosition(ScreenPosition);
+    }
+}
+
+void UNsUILibrary::StartActorSelection(const TArray<TSoftObjectPtr<AActor>>& Actors, bool bSnapCursorToSelection)
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->StartActorSelectionSession(Actors, bSnapCursorToSelection);
+    }
+}
+
+void UNsUILibrary::ExitActorSelection()
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->ExitActorSelectionSession();
+    }
+}
+
+AActor* UNsUILibrary::StepActorSelection(int32 Direction, bool bSnapCursorToSelection)
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        return UISubsystem->StepActorSelection(Direction, bSnapCursorToSelection);
+    }
+    return nullptr;
+}
+
+AActor* UNsUILibrary::GetCurrentActorSelection()
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        return UISubsystem->GetCurrentActorSelection();
     }
     return nullptr;
 }

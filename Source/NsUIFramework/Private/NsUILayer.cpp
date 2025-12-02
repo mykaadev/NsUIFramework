@@ -2,53 +2,116 @@
 
 #include "NsUILayer.h"
 
+#include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/PanelWidget.h"
-#include "NsUILibrary.h"
-#include "NsUISubsystem.h"
 #include "NsUIWidget.h"
 
 void UNsUILayer::NativeConstruct()
 {
     Super::NativeConstruct();
-    Stack.Empty();
+    Stack.Reset();
 }
 
-UNsUIWidgetStackElement* UNsUILayer::CreateStackElement(UUserWidget* Widget) const
+UNsUIWidgetStackElement* UNsUILayer::CreateStackElement(UUserWidget* Widget, bool bCollapsedBelow) const
 {
     if (!Widget)
     {
         return nullptr;
     }
 
-    UNsUIWidgetStackElement* Element = NewObject<UNsUIWidgetStackElement>(Widget);
+    UNsUIWidgetStackElement* Element = NewObject<UNsUIWidgetStackElement>(this);
     Element->Widget = Widget;
     Element->Layer = ENsUILayerType::None;
+    Element->bCollapsedEntryBelow = bCollapsedBelow;
     return Element;
 }
 
-void UNsUILayer::HideCurrentTop()
+void UNsUILayer::AttachToLayer(UUserWidget* Widget) const
 {
-    if (UNsUIWidgetStackElement* Top = Peek())
+    if (!Widget)
     {
-        Top->Widget->SetVisibility(ESlateVisibility::Collapsed);
+        return;
+    }
+
+    if (LayerPanel)
+    {
+        LayerPanel->AddChild(Widget);
+    }
+    else if (LayerRoot)
+    {
+        LayerRoot->SetContent(Widget);
     }
 }
 
-void UNsUILayer::ShowCurrentTop()
+void UNsUILayer::DetachFromLayer(UUserWidget* Widget) const
 {
-    if (UNsUIWidgetStackElement* Top = Peek())
+    if (!Widget)
     {
-        Top->Widget->SetVisibility(ESlateVisibility::Visible);
-        Top->Widget->SetKeyboardFocus();
+        return;
+    }
+
+    if (LayerPanel)
+    {
+        LayerPanel->RemoveChild(Widget);
+    }
+    else if (LayerRoot && LayerRoot->GetContent() == Widget)
+    {
+        LayerRoot->SetContent(nullptr);
+    }
+
+    Widget->RemoveFromParent();
+}
+
+void UNsUILayer::NotifyWidgetPushed(UUserWidget* Widget) const
+{
+    if (INsUINavigation* Navigation = Cast<INsUINavigation>(Widget))
+    {
+        Navigation->Execute_OnWidgetPushed(Widget);
     }
 }
 
-UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InClass, bool bCollapsePrevious)
+void UNsUILayer::ShowTopAndRestoreFocus()
+{
+    if (UNsUIWidgetStackElement* Top = Peek())
+    {
+        if (UUserWidget* Widget = Top->Widget.Get())
+        {
+            if (LayerPanel && Widget->GetParent() != LayerPanel)
+            {
+                LayerPanel->AddChild(Widget);
+            }
+            else if (LayerRoot && LayerRoot->GetContent() != Widget)
+            {
+                LayerRoot->SetContent(Widget);
+            }
+
+            Widget->SetVisibility(ESlateVisibility::Visible);
+
+            if (INsUINavigation* Navigation = Cast<INsUINavigation>(Widget))
+            {
+                if (UWidget* FocusTarget = Navigation->Execute_GetInitialFocusWidget(Widget))
+                {
+                    FocusTarget->SetKeyboardFocus();
+                }
+                else
+                {
+                    Widget->SetKeyboardFocus();
+                }
+            }
+            else
+            {
+                Widget->SetKeyboardFocus();
+            }
+        }
+    }
+}
+
+UNsUIWidgetStackElement* UNsUILayer::PushClass(const TSoftClassPtr<UUserWidget>& InClass, bool bCollapsePrevious)
 {
     APlayerController* OwningPlayer = GetOwningPlayer();
-    if (!OwningPlayer || (!LayerRoot && !LayerPanel))
+    if (!OwningPlayer)
     {
         return nullptr;
     }
@@ -60,35 +123,47 @@ UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InCl
     }
 
     UUserWidget* NewWidget = CreateWidget<UUserWidget>(OwningPlayer, WidgetClass);
-    if (!NewWidget)
+    return PushWidget(NewWidget, bCollapsePrevious);
+}
+
+UNsUIWidgetStackElement* UNsUILayer::PushWidget(UUserWidget* InWidget, bool bCollapsePrevious)
+{
+    if (!InWidget)
+    {
+        return nullptr;
+    }
+
+    if (!LayerRoot && !LayerPanel)
     {
         return nullptr;
     }
 
     if (bCollapsePrevious)
     {
-        HideCurrentTop();
+        if (UNsUIWidgetStackElement* Top = Peek())
+        {
+            if (Top->Widget)
+            {
+                Top->Widget->SetVisibility(ESlateVisibility::Collapsed);
+            }
+        }
     }
 
-    if (LayerPanel)
-    {
-        LayerPanel->AddChild(NewWidget);
-    }
-    else if (LayerRoot)
-    {
-        LayerRoot->SetContent(NewWidget);
-    }
+    AttachToLayer(InWidget);
 
-    UNsUIWidgetStackElement* Element = CreateStackElement(NewWidget);
+    UNsUIWidgetStackElement* Element = CreateStackElement(InWidget, bCollapsePrevious);
     Stack.Add(Element);
-    ShowCurrentTop();
+
+    NotifyWidgetPushed(InWidget);
+    ShowTopAndRestoreFocus();
+
     return Element;
 }
 
-UNsUIWidgetStackElement* UNsUILayer::ReplaceTop(const TSoftClassPtr<UUserWidget>& InClass)
+UNsUIWidgetStackElement* UNsUILayer::ReplaceTopWithClass(const TSoftClassPtr<UUserWidget>& InClass, bool bCollapsePrevious)
 {
     Pop();
-    return Push(InClass);
+    return PushClass(InClass, bCollapsePrevious);
 }
 
 UNsUIWidgetStackElement* UNsUILayer::Pop()
@@ -101,18 +176,10 @@ UNsUIWidgetStackElement* UNsUILayer::Pop()
     UNsUIWidgetStackElement* Removed = Stack.Pop();
     if (Removed && Removed->Widget)
     {
-        if (LayerPanel)
-        {
-            LayerPanel->RemoveChild(Removed->Widget);
-        }
-        else if (LayerRoot && LayerRoot->GetContent() == Removed->Widget)
-        {
-            LayerRoot->SetContent(nullptr);
-        }
-        Removed->Widget->RemoveFromParent();
+        DetachFromLayer(Removed->Widget);
     }
 
-    ShowCurrentTop();
+    ShowTopAndRestoreFocus();
     return Removed;
 }
 
@@ -138,20 +205,12 @@ UNsUIWidgetStackElement* UNsUILayer::RemoveWidgetFromStack(UUserWidget* InWidget
 
     if (Removed && Removed->Widget)
     {
-        if (LayerPanel)
-        {
-            LayerPanel->RemoveChild(Removed->Widget);
-        }
-        else if (LayerRoot && LayerRoot->GetContent() == Removed->Widget)
-        {
-            LayerRoot->SetContent(nullptr);
-        }
-        Removed->Widget->RemoveFromParent();
+        DetachFromLayer(Removed->Widget);
     }
 
     if (Index == Stack.Num())
     {
-        ShowCurrentTop();
+        ShowTopAndRestoreFocus();
     }
 
     return Removed;
@@ -163,27 +222,16 @@ void UNsUILayer::ClearStack()
     {
         if (Element && Element->Widget)
         {
-            if (LayerPanel)
-            {
-                LayerPanel->RemoveChild(Element->Widget);
-            }
-            else if (LayerRoot && LayerRoot->GetContent() == Element->Widget)
-            {
-                LayerRoot->SetContent(nullptr);
-            }
-            Element->Widget->RemoveFromParent();
+            DetachFromLayer(Element->Widget);
         }
     }
+
     Stack.Empty();
+
     if (LayerRoot)
     {
         LayerRoot->SetContent(nullptr);
     }
-}
-
-UNsUIWidgetStackElement* UNsUILayer::Peek()
-{
-    return Stack.Num() > 0 ? Stack.Last() : nullptr;
 }
 
 TArray<UNsUIWidgetStackElement*> UNsUILayer::Unwind()
@@ -194,4 +242,9 @@ TArray<UNsUIWidgetStackElement*> UNsUILayer::Unwind()
         Removed.Add(Element);
     }
     return Removed;
+}
+
+UNsUIWidgetStackElement* UNsUILayer::Peek() const
+{
+    return Stack.Num() > 0 ? Stack.Last() : nullptr;
 }

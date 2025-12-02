@@ -6,9 +6,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "NsUILibrary.generated.h"
 
-/**
- * Enum used to define the layer type
- */
+/** Enum used to define the layer type */
 UENUM(BlueprintType)
 enum class ENsUILayerType : uint8
 {
@@ -56,18 +54,21 @@ struct FNsUILayerTransitionRequest
     bool bCollapsePrevious = true;
 };
 
-/** Lightweight stack element that only tracks the widget and owning layer */
+/** Lightweight stack element that tracks the widget and whether it collapsed the entry below. */
 UCLASS()
-class UNsUIWidgetStackElement : public UObject
+class NSUIFRAMEWORK_API UNsUIWidgetStackElement : public UObject
 {
     GENERATED_BODY()
 
 public:
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ns UI Framework|Layer")
     TObjectPtr<class UUserWidget> Widget = nullptr;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ns UI Framework|Layer")
     ENsUILayerType Layer = ENsUILayerType::None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ns UI Framework|Layer")
+    bool bCollapsedEntryBelow = true;
 };
 
 /**
@@ -80,41 +81,65 @@ class NSUIFRAMEWORK_API UNsUILibrary : public UBlueprintFunctionLibrary
 
 public:
     /** Push a widget to the given layer */
-    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layers")
     static class UUserWidget* AddWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious = true);
 
     /** Replace the top widget on a layer */
-    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
-    static class UUserWidget* ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType);
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layers")
+    static class UUserWidget* ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious = true);
 
     /** Pop the top widget from a layer */
-    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layers")
     static void PopWidgetFromLayer(ENsUILayerType InLayerType);
 
     /** Pop everything from a layer */
-    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layers")
     static void UnwindLayer(ENsUILayerType InLayerType);
 
     /** Remove a specific widget from a layer */
-    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layers")
     static void RemoveWidgetFromLayer(ENsUILayerType InLayerType, class UUserWidget* InWidget);
 
     /** Clear every widget from a layer */
-    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layers")
     static void ClearLayer(ENsUILayerType InLayerType);
 
-    /** Perform a centralized layer transition (Push/Replace/Pop/Remove/Clear) */
-    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    /** Perform a centralized layer transition (Push/Replace/Pop/Remove/Clear/Unwind) */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layers")
     static class UUserWidget* ApplyLayerTransition(const FNsUILayerTransitionRequest& Request);
+
+    /** Swap the active layout used by the subsystem. */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layouts")
+    static void SetActiveLayout(const TSoftClassPtr<class UNsUILayout>& InLayoutClass);
+
+    /** Retro cursor helpers */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Cursor")
+    static void SetRetroCursorClass(const TSoftClassPtr<class UNsUICursor>& InCursorClass);
+
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Cursor")
+    static void MoveRetroCursorToWidget(class UWidget* TargetWidget);
+
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Cursor")
+    static void MoveRetroCursorToScreenPosition(const FVector2D& ScreenPosition);
+
+    /** Actor selection helpers that also drive the retro cursor when requested. */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Actor Selection")
+    static void StartActorSelection(const TArray<TSoftObjectPtr<class AActor>>& Actors, bool bSnapCursorToSelection = true);
+
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Actor Selection")
+    static void ExitActorSelection();
+
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Actor Selection")
+    static class AActor* StepActorSelection(int32 Direction, bool bSnapCursorToSelection = true);
+
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Actor Selection")
+    static class AActor* GetCurrentActorSelection();
 
     /** Gather all navigable widgets inside another widget */
     UFUNCTION()
     static void GatherAllNavigableDescendants(const class UUserWidget* RootWidget, TArray<class UWidget*>& OutNavigables);
 
-    /**
-     * Find the content root for navigation. Returns the outermost widget that
-     * lives inside an NsUILayer.
-     */
+    /** Find the content root for navigation. Returns the outermost widget that lives inside an NsUILayer. */
     UFUNCTION()
     static UUserWidget* FindLayerContentRoot(UWidget* InWidget);
 };

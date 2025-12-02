@@ -8,7 +8,7 @@
 #include "NsUILayout.generated.h"
 
 /**
- * Simple UI Layout that holds multiple layers.
+ * UI Layout that owns multiple layers and proxies stack operations to them.
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
@@ -18,51 +18,52 @@ class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
 public:
     virtual void NativeOnInitialized() override;
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     void RegisterLayer(ENsUILayerType InLayerType, class UNsUILayer* InLayer);
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     bool UnregisterLayer(ENsUILayerType InLayerType);
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     class UNsUIWidgetStackElement* PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass, bool bCollapsePrevious = true);
 
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
+    class UNsUIWidgetStackElement* ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass, bool bCollapsePrevious = true);
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     class UNsUIWidgetStackElement* PopContentFromLayer(ENsUILayerType InLayerType);
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     class UNsUIWidgetStackElement* RemoveWidgetFromLayer(ENsUILayerType InLayerType, class UUserWidget* InWidget);
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     void ClearLayer(ENsUILayerType InLayerType);
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     TArray<class UNsUIWidgetStackElement*> UnwindLayer(ENsUILayerType InLayerType);
 
-    UFUNCTION(BlueprintCallable)
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     void ClearAllLayers() const;
 
+public:
     UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameStaticLayer;
+    TObjectPtr<class UNsUILayer> GameStaticLayer = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameMenuLayer;
+    TObjectPtr<class UNsUILayer> GameMenuLayer = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameModalLayer;
+    TObjectPtr<class UNsUILayer> GameModalLayer = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationStaticLayer;
+    TObjectPtr<class UNsUILayer> ApplicationStaticLayer = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationMenuLayer;
+    TObjectPtr<class UNsUILayer> ApplicationMenuLayer = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationModalLayer;
+    TObjectPtr<class UNsUILayer> ApplicationModalLayer = nullptr;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ns UI Framework|Layout")
     TMap<ENsUILayerType, UNsUILayer*> RegisteredLayers;
 };

@@ -4,25 +4,53 @@
 
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/PlayerController.h"
+#include "NsUICursor.h"
 #include "NsUILayout.h"
 #include "NsUILayer.h"
-#include "NsUICursor.h"
+#include "NsUISettings.h"
+#include "Stats/Stats.h"
 
 UNsUISubsystem::UNsUISubsystem()
     : ActiveUILayout(nullptr)
+    , RetroCursor(nullptr)
+    , RetroCursorClass(nullptr)
+    , ActorSelectionIndex(INDEX_NONE)
+    , bCursorTracksActorSelection(true)
 {
 }
 
 void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
+
+    if (const UNsUISettings* Settings = GetDefault<UNsUISettings>())
+    {
+        RetroCursorClass = Settings->CursorWidgetClass;
+    }
 }
 
 void UNsUISubsystem::Deinitialize()
 {
-    ActiveUILayout = nullptr;
+    DestroyActiveLayout();
+    RetroCursor = nullptr;
+    ActorSelectionCandidates.Empty();
+    ActorSelectionIndex = INDEX_NONE;
+
     Super::Deinitialize();
+}
+
+void UNsUISubsystem::Tick(float DeltaTime)
+{
+    UpdateRetroCursorFromActorSelection();
+}
+
+TStatId UNsUISubsystem::GetStatId() const
+{
+    RETURN_QUICK_DECLARE_CYCLE_STAT(UNsUISubsystem, STATGROUP_Tickables);
 }
 
 UNsUISubsystem* UNsUISubsystem::GetSubsystem()
@@ -43,6 +71,7 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<UUserWidget>&
     {
         return nullptr;
     }
+
     if (UNsUIWidgetStackElement* StackElement = ActiveUILayout->PushContentToLayer(InLayerType, InWidget, bCollapsePrevious))
     {
         return StackElement->Widget.Get();
@@ -50,13 +79,14 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<UUserWidget>&
     return nullptr;
 }
 
-UUserWidget* UNsUISubsystem::ReplaceTopWidgetOnLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType)
+UUserWidget* UNsUISubsystem::ReplaceTopWidgetOnLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious)
 {
     if (!ActiveUILayout)
     {
         return nullptr;
     }
-    if (UNsUIWidgetStackElement* StackElement = ActiveUILayout->ReplaceTopWidgetOnLayer(InLayerType, InWidget))
+
+    if (UNsUIWidgetStackElement* StackElement = ActiveUILayout->ReplaceTopWidgetOnLayer(InLayerType, InWidget, bCollapsePrevious))
     {
         return StackElement->Widget.Get();
     }
@@ -102,7 +132,7 @@ UNsUIWidgetStackElement* UNsUISubsystem::ApplyLayerTransition(const FNsUILayerTr
     case ENsUILayerTransitionOp::Push:
         return ActiveUILayout ? ActiveUILayout->PushContentToLayer(Request.LayerType, Request.WidgetClass, Request.bCollapsePrevious) : nullptr;
     case ENsUILayerTransitionOp::ReplaceTop:
-        return ActiveUILayout ? ActiveUILayout->ReplaceTopWidgetOnLayer(Request.LayerType, Request.WidgetClass) : nullptr;
+        return ActiveUILayout ? ActiveUILayout->ReplaceTopWidgetOnLayer(Request.LayerType, Request.WidgetClass, Request.bCollapsePrevious) : nullptr;
     case ENsUILayerTransitionOp::Pop:
         return ActiveUILayout ? ActiveUILayout->PopContentFromLayer(Request.LayerType) : nullptr;
     case ENsUILayerTransitionOp::Remove:
@@ -120,6 +150,15 @@ UNsUIWidgetStackElement* UNsUISubsystem::ApplyLayerTransition(const FNsUILayerTr
     }
 }
 
+void UNsUISubsystem::DestroyActiveLayout()
+{
+    if (ActiveUILayout)
+    {
+        ActiveUILayout->RemoveFromParent();
+        ActiveUILayout = nullptr;
+    }
+}
+
 void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<UNsUILayout>& InLayout)
 {
     if (!GetWorld())
@@ -130,14 +169,16 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<UNsUILayout>& InLayou
     UClass* LayoutClass = InLayout.LoadSynchronous();
     if (!LayoutClass)
     {
+        DestroyActiveLayout();
         return;
     }
 
-    if (ActiveUILayout)
+    if (ActiveUILayout && ActiveUILayout->GetClass() == LayoutClass)
     {
-        ActiveUILayout->RemoveFromParent();
-        ActiveUILayout = nullptr;
+        return;
     }
+
+    DestroyActiveLayout();
 
     ActiveUILayout = CreateWidget<UNsUILayout>(GetWorld(), LayoutClass);
     if (ActiveUILayout)
@@ -199,7 +240,7 @@ void UNsUISubsystem::MoveRetroCursorToScreenPosition(const FVector2D& ScreenPosi
     }
 }
 
-void UNsUISubsystem::StartActorSelectionSession(const TArray<TSoftObjectPtr<AActor>>& Actors)
+void UNsUISubsystem::StartActorSelectionSession(const TArray<TSoftObjectPtr<AActor>>& Actors, bool bSnapCursorToSelection)
 {
     ActorSelectionCandidates.Empty();
     ActorSelectionIndex = INDEX_NONE;
@@ -219,6 +260,10 @@ void UNsUISubsystem::StartActorSelectionSession(const TArray<TSoftObjectPtr<AAct
     if (ActorSelectionCandidates.Num() > 0)
     {
         ActorSelectionIndex = 0;
+        if (bSnapCursorToSelection)
+        {
+            UpdateRetroCursorFromActorSelection();
+        }
     }
 }
 
@@ -235,7 +280,7 @@ AActor* UNsUISubsystem::GetCurrentActorSelection() const
         : nullptr;
 }
 
-AActor* UNsUISubsystem::StepActorSelection(int32 Direction)
+AActor* UNsUISubsystem::StepActorSelection(int32 Direction, bool bSnapCursorToSelection)
 {
     if (ActorSelectionCandidates.Num() == 0)
     {
@@ -255,5 +300,53 @@ AActor* UNsUISubsystem::StepActorSelection(int32 Direction)
         }
     }
 
+    if (bSnapCursorToSelection)
+    {
+        UpdateRetroCursorFromActorSelection();
+    }
+
     return GetCurrentActorSelection();
+}
+
+bool UNsUISubsystem::ProjectActorToScreen(const AActor* Actor, FVector2D& OutScreenPos) const
+{
+    OutScreenPos = FVector2D::ZeroVector;
+
+    if (!Actor)
+    {
+        return false;
+    }
+
+    if (const UWorld* World = GetWorld())
+    {
+        if (APlayerController* PC = World->GetFirstPlayerController())
+        {
+            return PC->ProjectWorldLocationToScreen(Actor->GetActorLocation(), OutScreenPos);
+        }
+    }
+
+    return false;
+}
+
+void UNsUISubsystem::UpdateRetroCursorFromActorSelection()
+{
+    if (!bCursorTracksActorSelection)
+    {
+        return;
+    }
+
+    if (UNsUICursor* Cursor = EnsureRetroCursor())
+    {
+        if (AActor* Actor = GetCurrentActorSelection())
+        {
+            FVector2D ScreenPos;
+            if (ProjectActorToScreen(Actor, ScreenPos))
+            {
+                Cursor->MoveToScreenPosition(ScreenPos);
+                return;
+            }
+        }
+
+        Cursor->SetVisibility(ESlateVisibility::Collapsed);
+    }
 }

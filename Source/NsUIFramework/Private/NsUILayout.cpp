@@ -52,16 +52,16 @@ UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(ENsUILayerType InLayerT
 {
     if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        return (*FoundLayer)->Push(InWidgetClass, bCollapsePrevious);
+        return (*FoundLayer)->PushClass(InWidgetClass, bCollapsePrevious);
     }
     return nullptr;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass)
+UNsUIWidgetStackElement* UNsUILayout::ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass, bool bCollapsePrevious)
 {
     if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        return (*FoundLayer)->ReplaceTop(InWidgetClass);
+        return (*FoundLayer)->ReplaceTopWithClass(InWidgetClass, bCollapsePrevious);
     }
     return nullptr;
 }
