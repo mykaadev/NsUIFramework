@@ -9,11 +9,11 @@
 #include "NsUISubsystem.h"
 #include "NsUIWidget.h"
 
-UUserWidget* UNsUILibrary::AddWidgetToLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType)
+UUserWidget* UNsUILibrary::AddWidgetToLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious)
 {
     if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
     {
-        return UISubsystem->PushWidgetToLayer(InWidget, InLayerType);
+        return UISubsystem->PushWidgetToLayer(InWidget, InLayerType, bCollapsePrevious);
     }
     return nullptr;
 }
@@ -32,6 +32,14 @@ void UNsUILibrary::PopWidgetFromLayer(ENsUILayerType InLayerType)
     if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
     {
         UISubsystem->PopWidgetFromLayer(InLayerType);
+    }
+}
+
+void UNsUILibrary::UnwindLayer(ENsUILayerType InLayerType)
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->UnwindLayer(InLayerType);
     }
 }
 

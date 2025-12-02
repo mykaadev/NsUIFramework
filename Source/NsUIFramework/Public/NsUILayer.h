@@ -7,6 +7,8 @@
 #include "NsUILibrary.h"
 #include "NsUILayer.generated.h"
 
+class UPanelWidget;
+
 /**
  * Simple UI Layer that owns a stack of widgets.
  */
@@ -18,9 +20,9 @@ class NSUIFRAMEWORK_API UNsUILayer : public UUserWidget
 public:
     virtual void NativeConstruct() override;
 
-    /** Push content */
+    /** Push content. Set bCollapsePrevious to false to show multiple widgets concurrently on this layer. */
     UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* Push(const TSoftClassPtr<class UUserWidget>& InClass);
+    class UNsUIWidgetStackElement* Push(const TSoftClassPtr<class UUserWidget>& InClass, bool bCollapsePrevious = true);
 
     /** Replace the current top widget with a new one */
     UFUNCTION(BlueprintCallable)
@@ -38,6 +40,10 @@ public:
     UFUNCTION(BlueprintCallable)
     void ClearStack();
 
+    /** Pop every widget from the stack and return the removed elements (top-first). */
+    UFUNCTION(BlueprintCallable)
+    TArray<class UNsUIWidgetStackElement*> Unwind();
+
     /** Peek */
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* Peek();
@@ -54,6 +60,10 @@ private:
 public:
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<class UBorder> LayerRoot;
+
+    /** Optional panel root to support showing multiple widgets at once. */
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<class UPanelWidget> LayerPanel;
 
 protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)

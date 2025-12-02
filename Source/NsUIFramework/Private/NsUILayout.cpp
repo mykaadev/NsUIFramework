@@ -48,11 +48,11 @@ bool UNsUILayout::UnregisterLayer(ENsUILayerType InLayerType)
     return RegisteredLayers.Remove(InLayerType) > 0;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass)
+UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass, bool bCollapsePrevious)
 {
     if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        return (*FoundLayer)->Push(InWidgetClass);
+        return (*FoundLayer)->Push(InWidgetClass, bCollapsePrevious);
     }
     return nullptr;
 }
@@ -90,6 +90,15 @@ void UNsUILayout::ClearLayer(ENsUILayerType InLayerType)
     {
         (*FoundLayer)->ClearStack();
     }
+}
+
+TArray<UNsUIWidgetStackElement*> UNsUILayout::UnwindLayer(ENsUILayerType InLayerType)
+{
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
+    {
+        return (*FoundLayer)->Unwind();
+    }
+    return {};
 }
 
 void UNsUILayout::ClearAllLayers() const

@@ -25,7 +25,7 @@ public:
     bool UnregisterLayer(ENsUILayerType InLayerType);
 
     UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
+    class UNsUIWidgetStackElement* PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass, bool bCollapsePrevious = true);
 
     UFUNCTION(BlueprintCallable)
     class UNsUIWidgetStackElement* ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
@@ -38,6 +38,9 @@ public:
 
     UFUNCTION(BlueprintCallable)
     void ClearLayer(ENsUILayerType InLayerType);
+
+    UFUNCTION(BlueprintCallable)
+    TArray<class UNsUIWidgetStackElement*> UnwindLayer(ENsUILayerType InLayerType);
 
     UFUNCTION(BlueprintCallable)
     void ClearAllLayers() const;

@@ -4,6 +4,7 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
+#include "Components/PanelWidget.h"
 #include "NsUILibrary.h"
 #include "NsUISubsystem.h"
 #include "NsUIWidget.h"
@@ -44,10 +45,10 @@ void UNsUILayer::ShowCurrentTop()
     }
 }
 
-UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InClass)
+UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InClass, bool bCollapsePrevious)
 {
     APlayerController* OwningPlayer = GetOwningPlayer();
-    if (!OwningPlayer || !LayerRoot)
+    if (!OwningPlayer || (!LayerRoot && !LayerPanel))
     {
         return nullptr;
     }
@@ -64,8 +65,19 @@ UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InCl
         return nullptr;
     }
 
-    HideCurrentTop();
-    LayerRoot->SetContent(NewWidget);
+    if (bCollapsePrevious)
+    {
+        HideCurrentTop();
+    }
+
+    if (LayerPanel)
+    {
+        LayerPanel->AddChild(NewWidget);
+    }
+    else if (LayerRoot)
+    {
+        LayerRoot->SetContent(NewWidget);
+    }
 
     UNsUIWidgetStackElement* Element = CreateStackElement(NewWidget);
     Stack.Add(Element);
@@ -89,6 +101,14 @@ UNsUIWidgetStackElement* UNsUILayer::Pop()
     UNsUIWidgetStackElement* Removed = Stack.Pop();
     if (Removed && Removed->Widget)
     {
+        if (LayerPanel)
+        {
+            LayerPanel->RemoveChild(Removed->Widget);
+        }
+        else if (LayerRoot && LayerRoot->GetContent() == Removed->Widget)
+        {
+            LayerRoot->SetContent(nullptr);
+        }
         Removed->Widget->RemoveFromParent();
     }
 
@@ -118,6 +138,14 @@ UNsUIWidgetStackElement* UNsUILayer::RemoveWidgetFromStack(UUserWidget* InWidget
 
     if (Removed && Removed->Widget)
     {
+        if (LayerPanel)
+        {
+            LayerPanel->RemoveChild(Removed->Widget);
+        }
+        else if (LayerRoot && LayerRoot->GetContent() == Removed->Widget)
+        {
+            LayerRoot->SetContent(nullptr);
+        }
         Removed->Widget->RemoveFromParent();
     }
 
@@ -135,6 +163,14 @@ void UNsUILayer::ClearStack()
     {
         if (Element && Element->Widget)
         {
+            if (LayerPanel)
+            {
+                LayerPanel->RemoveChild(Element->Widget);
+            }
+            else if (LayerRoot && LayerRoot->GetContent() == Element->Widget)
+            {
+                LayerRoot->SetContent(nullptr);
+            }
             Element->Widget->RemoveFromParent();
         }
     }
@@ -148,4 +184,14 @@ void UNsUILayer::ClearStack()
 UNsUIWidgetStackElement* UNsUILayer::Peek()
 {
     return Stack.Num() > 0 ? Stack.Last() : nullptr;
+}
+
+TArray<UNsUIWidgetStackElement*> UNsUILayer::Unwind()
+{
+    TArray<UNsUIWidgetStackElement*> Removed;
+    while (UNsUIWidgetStackElement* Element = Pop())
+    {
+        Removed.Add(Element);
+    }
+    return Removed;
 }

@@ -29,7 +29,8 @@ enum class ENsUILayerTransitionOp : uint8
     ReplaceTop,
     Pop,
     Remove,
-    ClearLayer
+    ClearLayer,
+    Unwind
 };
 
 /** Simple request used by ApplyLayerTransition */
@@ -49,6 +50,10 @@ struct FNsUILayerTransitionRequest
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ns UI Framework")
     TObjectPtr<class UUserWidget> WidgetInstance = nullptr;
+
+    /** When pushing, choose whether to collapse the previous widget. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ns UI Framework")
+    bool bCollapsePrevious = true;
 };
 
 /** Lightweight stack element that only tracks the widget and owning layer */
@@ -76,7 +81,7 @@ class NSUIFRAMEWORK_API UNsUILibrary : public UBlueprintFunctionLibrary
 public:
     /** Push a widget to the given layer */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
-    static class UUserWidget* AddWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType);
+    static class UUserWidget* AddWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious = true);
 
     /** Replace the top widget on a layer */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
@@ -85,6 +90,10 @@ public:
     /** Pop the top widget from a layer */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
     static void PopWidgetFromLayer(ENsUILayerType InLayerType);
+
+    /** Pop everything from a layer */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    static void UnwindLayer(ENsUILayerType InLayerType);
 
     /** Remove a specific widget from a layer */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
