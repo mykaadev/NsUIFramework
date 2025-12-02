@@ -35,6 +35,13 @@ This document outlines concerns and implementation approaches to evolve the NsUI
 - **Data-driven definitions**: Move recurring patterns into data assets (menu definitions, prompt sets, accessibility roles, animation presets). This reduces blueprint sprawl and enables live reloading.
 - **Preview & simulation**: Provide editor simulations for devices (gamepad vs. touch), localization lengths, colorblind filters, and reduced-motion. Persist per-level UI layout previews for quick iteration.
 
+### Why data assets help (practical benefits)
+- **Repeatable flows without reblueprinting**: A data asset that defines a menu flow or transition (target widget, focus rule, animation preset, platform constraints) can be reused across levels and projects, avoiding duplicated blueprint graphs for “push → animate → focus” patterns.
+- **Safer iteration & live reload**: Designers can tweak focus rules, prompt sets, or animation presets in data without recompiling C++/Blueprints; changes hot-reload while retaining a stable contract that code already consumes.
+- **Better validation**: Assets can be validated at cook time (missing widgets, bad focus targets, incompatible platforms), which is far harder to guarantee when every screen wires its own logic.
+- **Async readiness baked in**: Transition assets can encode loading policies (placeholder vs. blocking) so the runtime knows when to delay focus handoff; this keeps navigation deterministic even when assets stream in.
+- **Telemetry & A/B friendliness**: Because transitions and prompts are data, analytics can tag flows by asset ID, and live A/B tests can swap assets without new builds.
+
 ## 7) Reliability, testing, and telemetry
 - **Deterministic testing harness**: Add an automated UI runner that can: load a layout, push widgets, simulate navigation/confirm/cancel, assert focus targets, and capture golden screenshots. Make it data-driven so QA can author flows without code.
 - **Metrics & breadcrumbs**: Emit breadcrumbs for every transition, focus change, and input consume path. Attach widget class, stack depth, layer type, and invocation context so issues like “hidden widget eating input” are traceable.
