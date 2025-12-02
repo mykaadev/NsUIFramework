@@ -15,7 +15,7 @@ This document outlines concerns and implementation approaches to evolve the NsUI
 
 ## 3) Stack & state management upgrades
 - **Address blind pops**: Layer stacks should support keyed removal and replacement (already present) plus named scopes. Let callers address widgets by stable IDs or tags, and expose queries (`FindFirst/FindAll by tag`) to avoid iterative popping.
-- **Transitions as data**: Represent stack transitions as data assets (e.g., “Pause → Settings → Rebinds”) to enable reuse, async loading, and preview in editor. Transitions carry: target widget class, focus rule, animation preset, and platform constraints.
+- **Simple, explicit transitions**: Keep stack transitions authored in code/Blueprint helpers with explicit parameters (target widget class, focus rule, animation preset, platform constraints) instead of external assets. Favor readability and debuggability over indirection.
 - **History & restoration**: Persist stack history snapshots per player/session so the framework can restore UI when rejoining or recovering from a crash. Include serialization of focus target and transient widget state when supported by the widget.
 - **Scoped lifetime policies**: Add lifetime modes—`Transient` (auto-pop on blur), `Modal` (blocks lower layers), `Persistent` (HUD), and `Pinned` (cannot be removed unless by tag). Use policies to prevent accidental removal of critical HUD elements when using generic removal APIs.
 
@@ -32,15 +32,8 @@ This document outlines concerns and implementation approaches to evolve the NsUI
 
 ## 6) Authoring experience
 - **Blueprint-first, C++-backed**: Keep Blueprint usability but back critical flows with C++ services. Expose validation tools (an “Input Navigation Audit” tab) to visualize navigation graphs and detect dead ends or unfocusable widgets.
-- **Data-driven definitions**: Move recurring patterns into data assets (menu definitions, prompt sets, accessibility roles, animation presets). This reduces blueprint sprawl and enables live reloading.
+- **Configurable definitions without asset sprawl**: Keep recurring patterns centralized (menu definitions, prompt sets, accessibility roles, animation presets) via lean config structures or shared components, not dedicated data assets, so core flows stay simple.
 - **Preview & simulation**: Provide editor simulations for devices (gamepad vs. touch), localization lengths, colorblind filters, and reduced-motion. Persist per-level UI layout previews for quick iteration.
-
-### Why data assets help (practical benefits)
-- **Repeatable flows without reblueprinting**: A data asset that defines a menu flow or transition (target widget, focus rule, animation preset, platform constraints) can be reused across levels and projects, avoiding duplicated blueprint graphs for “push → animate → focus” patterns.
-- **Safer iteration & live reload**: Designers can tweak focus rules, prompt sets, or animation presets in data without recompiling C++/Blueprints; changes hot-reload while retaining a stable contract that code already consumes.
-- **Better validation**: Assets can be validated at cook time (missing widgets, bad focus targets, incompatible platforms), which is far harder to guarantee when every screen wires its own logic.
-- **Async readiness baked in**: Transition assets can encode loading policies (placeholder vs. blocking) so the runtime knows when to delay focus handoff; this keeps navigation deterministic even when assets stream in.
-- **Telemetry & A/B friendliness**: Because transitions and prompts are data, analytics can tag flows by asset ID, and live A/B tests can swap assets without new builds.
 
 ## 7) Reliability, testing, and telemetry
 - **Deterministic testing harness**: Add an automated UI runner that can: load a layout, push widgets, simulate navigation/confirm/cancel, assert focus targets, and capture golden screenshots. Make it data-driven so QA can author flows without code.
@@ -55,7 +48,7 @@ This document outlines concerns and implementation approaches to evolve the NsUI
 - Define a single “focus & navigation contract” doc/code module that spells out how `UNsUILayer`, `UNsUISubsystem`, and `INsUINavigation` interact. Add runtime asserts when the contract is violated to catch hidden/invalid widgets early.
 - Extend the current layer stack to store stable IDs/tags per `UNsUIWidgetStackElement`, enabling targeted removal/replacement without blind pops or pointer searches.
 - Add a priority flag to `UNsUILayer` instances to block lower layers and redirect input until the priority yields; expose this in `UNsUISubsystem` routing so actors vs. UI can be resolved centrally.
-- Create a data-driven transition asset (`UNsUIFlowAsset`) that encapsulates Push/Replace/Remove + animation + focus rule, and let Blueprint library helpers consume it instead of manual calls.
+- Add a single transition helper API (C++ + Blueprint) that wraps Push/Replace/Remove with animation and focus parameters so menu changes stay consistent without extra assets or indirection.
 - Introduce a minimal telemetry surface: on every Push/Pop/Replace/Remove, emit a struct containing layer, widget class, invoker, focus before/after, and reason; log to a rotating debug buffer and analytics hook for QA.
 - Provide debug visualization widgets that render the current stack, focus target, and navigation candidates (including actor selection candidates) to make iteration predictable.
 
