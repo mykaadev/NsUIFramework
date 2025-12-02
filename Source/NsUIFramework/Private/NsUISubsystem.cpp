@@ -136,6 +136,56 @@ void UNsUISubsystem::RemoveWidgetFromLayer(const ENsUILayerType InLayerType, UUs
     }
 }
 
+UNsUIWidgetStackElement* UNsUISubsystem::ApplyLayerTransition(const FNsUILayerTransitionRequest& Request)
+{
+    if (ActiveUILayout == nullptr && Request.Operation != ENsUILayerTransitionOp::ClearLayer)
+    {
+        CurrentScope = nullptr;
+        SetCurrentFocusedWidget(nullptr);
+        return nullptr;
+    }
+
+    switch (Request.Operation)
+    {
+        case ENsUILayerTransitionOp::Push:
+        {
+            PushWidgetToLayer(Request.WidgetClass, Request.LayerType);
+            break;
+        }
+        case ENsUILayerTransitionOp::ReplaceTop:
+        {
+            ReplaceTopWidgetOnLayer(Request.WidgetClass, Request.LayerType);
+            break;
+        }
+        case ENsUILayerTransitionOp::Pop:
+        {
+            PopWidgetFromLayer(Request.LayerType);
+            break;
+        }
+        case ENsUILayerTransitionOp::Remove:
+        {
+            RemoveWidgetFromLayer(Request.LayerType, Request.WidgetInstance);
+            break;
+        }
+        case ENsUILayerTransitionOp::ClearLayer:
+        {
+            if (ActiveUILayout != nullptr)
+            {
+                ActiveUILayout->ClearLayer(Request.LayerType);
+            }
+            CurrentScope = nullptr;
+            SetCurrentFocusedWidget(nullptr);
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    return CurrentScope;
+}
+
 void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& InLayout)
 {
     APlayerController* const LocalPlayerController = UGameplayStatics::GetPlayerController(this, 0);

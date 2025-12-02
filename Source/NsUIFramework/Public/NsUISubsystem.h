@@ -53,6 +53,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     void RemoveWidgetFromLayer(const ENsUILayerType InLayerType, class UUserWidget* InWidget);
 
+    /** Centralized helper to execute a layer transition in one call */
+    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
+    class UNsUIWidgetStackElement* ApplyLayerTransition(const FNsUILayerTransitionRequest& Request);
+
     /** Set Active UI Layout */
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     void SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& InLayout);

@@ -27,6 +27,40 @@ enum class ENsUILayerType : uint8
     ApplicationModal = 5
 };
 
+/** Minimal layer transition operations to avoid manual stack juggling */
+UENUM(BlueprintType)
+enum class ENsUILayerTransitionOp : uint8
+{
+    Push,
+    ReplaceTop,
+    Pop,
+    Remove,
+    ClearLayer
+};
+
+/** Centralized request for performing a stack transition */
+USTRUCT(BlueprintType)
+struct FNsUILayerTransitionRequest
+{
+    GENERATED_BODY()
+
+    /** Which layer should receive the operation */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ns UI Framework")
+    ENsUILayerType LayerType = ENsUILayerType::None;
+
+    /** Operation to perform */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ns UI Framework")
+    ENsUILayerTransitionOp Operation = ENsUILayerTransitionOp::Push;
+
+    /** Widget class to push or replace */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ns UI Framework")
+    TSoftClassPtr<class UUserWidget> WidgetClass;
+
+    /** Specific widget instance to remove from the stack (optional) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ns UI Framework")
+    TObjectPtr<class UUserWidget> WidgetInstance = nullptr;
+};
+
 /**
  * Object to hold the info from each layer stack element
  */
@@ -146,6 +180,10 @@ public:
     /** Remove a specific widget from a layer without popping blindly */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
     static void RemoveWidgetFromLayer(const ENsUILayerType InLayerType, class UUserWidget* InWidget);
+
+    /** Perform a centralized layer transition (Push/Replace/Pop/Remove/Clear) in one place */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework")
+    static class UUserWidget* ApplyLayerTransition(const FNsUILayerTransitionRequest& Request);
 
     /** Gather all navigable widgets inside another widget */
     UFUNCTION()

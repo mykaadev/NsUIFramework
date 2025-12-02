@@ -49,6 +49,7 @@ This document outlines concerns and implementation approaches to evolve the NsUI
 - Extend the current layer stack to store stable IDs/tags per `UNsUIWidgetStackElement`, enabling targeted removal/replacement without blind pops or pointer searches.
 - Add a priority flag to `UNsUILayer` instances to block lower layers and redirect input until the priority yields; expose this in `UNsUISubsystem` routing so actors vs. UI can be resolved centrally.
 - Add a single transition helper API (C++ + Blueprint) that wraps Push/Replace/Remove with animation and focus parameters so menu changes stay consistent without extra assets or indirection.
+- Centralize day-to-day stack operations through one call site (e.g., a `FNsUILayerTransitionRequest` consumed by `UNsUILibrary::ApplyLayerTransition`) to keep Push/Replace/Pop/Remove/Clear behavior consistent and discoverable.
 - Introduce a minimal telemetry surface: on every Push/Pop/Replace/Remove, emit a struct containing layer, widget class, invoker, focus before/after, and reason; log to a rotating debug buffer and analytics hook for QA.
 - Provide debug visualization widgets that render the current stack, focus target, and navigation candidates (including actor selection candidates) to make iteration predictable.
 

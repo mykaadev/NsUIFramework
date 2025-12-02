@@ -45,6 +45,19 @@ void UNsUILibrary::RemoveWidgetFromLayer(const ENsUILayerType InLayerType, UUser
     }
 }
 
+UUserWidget* UNsUILibrary::ApplyLayerTransition(const FNsUILayerTransitionRequest& Request)
+{
+    if (UNsUISubsystem* const UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        if (UNsUIWidgetStackElement* const Scope = UISubsystem->ApplyLayerTransition(Request))
+        {
+            return Scope->WidgetScope;
+        }
+    }
+
+    return nullptr;
+}
+
 UUserWidget* UNsUILibrary::FindLayerContentRoot(UWidget* InWidget)
 {
     if (!IsValid(InWidget)) return nullptr;
