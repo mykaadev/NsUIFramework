@@ -3,9 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
 #include "NsUILayer.h"
 #include "NsUILibrary.h"
-#include "Blueprint/UserWidget.h"
 #include "NsUILayout.generated.h"
 
 /**

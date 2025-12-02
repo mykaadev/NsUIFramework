@@ -38,10 +38,6 @@ public:
 // Variables
 public:
 
-    /** UI Layouts: Layout Name - Layout Object*/
-    UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Layouts")
-    TMap<FString, TSoftClassPtr<class UNsUILayout>> UILayouts;
-
     /** Widget used to visualize which element currently has focus */
     UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Cursor")
     TSoftClassPtr<class UNsUICursor> CursorWidgetClass;

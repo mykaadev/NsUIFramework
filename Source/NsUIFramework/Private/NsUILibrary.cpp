@@ -117,11 +117,7 @@ void UNsUILibrary::GatherAllNavigableDescendants(const UUserWidget* const InRoot
     }
 }
 
-void UNsUILibrary::RegisterActorsForSelection(
-    const TArray<AActor*>& Actors,
-    const FNsUIActorDelegate::FDelegate& OnConfirm,
-    const FNsUIActorDelegate::FDelegate& OnCancel,
-    const FNsUIActorDelegate::FDelegate& OnToggle)
+void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors, const FNsUIActorDelegate::FDelegate& OnConfirm, const FNsUIActorDelegate::FDelegate& OnCancel, const FNsUIActorDelegate::FDelegate& OnToggle)
 {
     if (UNsUISubsystem* const UISubsystem = UNsUISubsystem::GetSubsystem())
     {

@@ -37,14 +37,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     static UNsUISubsystem* GetSubsystem();
 
-    /** Push widget to layer */
-    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
-    class UUserWidget* PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
-
-    /** Pop widget to layer */
-    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
-    void PopWidgetFromLayer(const ENsUILayerType InLayerType);
-
     /** Set Active UI Layout */
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     void SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& InLayout);
@@ -52,6 +44,14 @@ public:
     /** Get Active UI Layout */
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
     UNsUILayout* GetActiveUILayout() const;
+
+    /** Push widget to layer */
+    UFUNCTION()
+    class UUserWidget* PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
+
+    /** Pop widget to layer */
+    UFUNCTION()
+    void PopWidgetFromLayer(const ENsUILayerType InLayerType);
 
     /**
      * Called when the player presses the navigation input (eg: WASD)
@@ -83,15 +83,6 @@ public:
     /** Remove all registered actors */
     void ClearActorFocusTargets();
 
-    /** Event fired when an actor is confirmed */
-    FNsUIActorDelegate OnActorConfirmed;
-
-    /** Event fired when an actor is cancelled */
-    FNsUIActorDelegate OnActorCancelled;
-
-    /** Event fired when an actor is toggled */
-    FNsUIActorDelegate OnActorToggled;
-
     /**
     * If a widget’s explicit neighbor (e.g. GetUpNeighbor()) is null, we fall back
     * to this: scan all other widgets in the same layer (via the UI Subsystem) and
@@ -122,7 +113,19 @@ public:
     void UpdateActorCursor();
 
     /** Get current layer stack scope */
-    UNsUIWidgetStackElement* GetCurrentScope();
+    class UNsUIWidgetStackElement* GetCurrentScope();
+
+// Events
+public:
+
+    /** Event fired when an actor is confirmed */
+    FNsUIActorDelegate OnActorConfirmed;
+
+    /** Event fired when an actor is cancelled */
+    FNsUIActorDelegate OnActorCancelled;
+
+    /** Event fired when an actor is toggled */
+    FNsUIActorDelegate OnActorToggled;
 
 // Variables
 private:

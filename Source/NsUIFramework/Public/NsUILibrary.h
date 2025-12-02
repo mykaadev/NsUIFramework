@@ -129,6 +129,7 @@ class NSUIFRAMEWORK_API UNsUILibrary : public UBlueprintFunctionLibrary
 {
     GENERATED_BODY()
 
+// Functions
 public:
 
     /** Add widget to layer */

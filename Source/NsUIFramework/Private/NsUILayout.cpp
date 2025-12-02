@@ -1,7 +1,9 @@
 // Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILayout.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "NsUILayer.h"
 #include "NsUILibrary.h"
 
@@ -9,12 +11,67 @@ void UNsUILayout::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
 
-    RegisterLayer(ENsUILayerType::GameStatic, GameStaticLayer);
-    RegisterLayer(ENsUILayerType::GameMenu, GameMenuLayer);
-    RegisterLayer(ENsUILayerType::GameModal, GameModalLayer);
+    if (WidgetTree == nullptr)
+    {
+        WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
+    }
+
+    // Ensure we have a root overlay
+    UOverlay* RootOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
+    if (RootOverlay == nullptr && WidgetTree != nullptr)
+    {
+        if (WidgetTree->RootWidget == nullptr)
+        {
+            RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
+            WidgetTree->RootWidget = RootOverlay;
+        }
+        else
+        {
+            UWidget* const ExistingRoot = WidgetTree->RootWidget;
+
+            RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
+            WidgetTree->RootWidget = RootOverlay;
+
+            if (UOverlaySlot* const ExistingSlot = RootOverlay->AddChildToOverlay(ExistingRoot))
+            {
+                ExistingSlot->SetHorizontalAlignment(HAlign_Fill);
+                ExistingSlot->SetVerticalAlignment(VAlign_Fill);
+            }
+        }
+    }
+
+    // Helper: create missing layers, but keep any that BP already provided
+    auto EnsureLayer = [&](TObjectPtr<UNsUILayer>& LayerPtr, const FName Name) -> void
+    {
+        if (LayerPtr == nullptr && RootOverlay != nullptr && WidgetTree != nullptr)
+        {
+            if (UNsUILayer* const NewLayer = WidgetTree->ConstructWidget<UNsUILayer>(UNsUILayer::StaticClass(), Name))
+            {
+                if (UOverlaySlot* const Slot = RootOverlay->AddChildToOverlay(NewLayer))
+                {
+                    Slot->SetHorizontalAlignment(HAlign_Fill);
+                    Slot->SetVerticalAlignment(VAlign_Fill);
+                }
+
+                LayerPtr = NewLayer;
+            }
+        }
+    };
+
+    EnsureLayer(GameStaticLayer,        TEXT("GameStaticLayer"));
+    EnsureLayer(GameMenuLayer,          TEXT("GameMenuLayer"));
+    EnsureLayer(GameModalLayer,         TEXT("GameModalLayer"));
+    EnsureLayer(ApplicationStaticLayer, TEXT("ApplicationStaticLayer"));
+    EnsureLayer(ApplicationMenuLayer,   TEXT("ApplicationMenuLayer"));
+    EnsureLayer(ApplicationModalLayer,  TEXT("ApplicationModalLayer"));
+
+    // Now register whatever layers we have (BP-provided or auto-created)
+    RegisterLayer(ENsUILayerType::GameStatic,        GameStaticLayer);
+    RegisterLayer(ENsUILayerType::GameMenu,          GameMenuLayer);
+    RegisterLayer(ENsUILayerType::GameModal,         GameModalLayer);
     RegisterLayer(ENsUILayerType::ApplicationStatic, ApplicationStaticLayer);
-    RegisterLayer(ENsUILayerType::ApplicationMenu, ApplicationMenuLayer);
-    RegisterLayer(ENsUILayerType::ApplicationModal, ApplicationModalLayer);
+    RegisterLayer(ENsUILayerType::ApplicationMenu,   ApplicationMenuLayer);
+    RegisterLayer(ENsUILayerType::ApplicationModal,  ApplicationModalLayer);
 }
 
 void UNsUILayout::RegisterLayer(const ENsUILayerType InLayerType, class UNsUILayer* const InLayer)

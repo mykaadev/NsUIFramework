@@ -12,7 +12,6 @@
 #include "NsUILayout.h"
 #include "NsUILibrary.h"
 #include "NsUISettings.h"
-#include "NsUIWidget.h"
 #include "Stats/Stats.h"
 
 UNsUISubsystem::UNsUISubsystem()
@@ -120,20 +119,17 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& I
 
             if (const UNsUISettings* const Settings = UNsUISettings::GetSettings())
             {
-                if (Settings->CursorWidgetClass.IsNull())
+                if (!Settings->CursorWidgetClass.IsNull())
                 {
-                    UE_LOG(LogTemp, Error, TEXT("Failed to load Cursor"));
-                    return;
-                }
-
-                CursorWidget = CreateWidget<UNsUICursor>(LocalPlayerController, Settings->CursorWidgetClass.LoadSynchronous());
-                if (CursorWidget != nullptr && ActiveUILayout->WidgetTree != nullptr)
-                {
-                    if (UPanelWidget* const RootPanel = Cast<UPanelWidget>(ActiveUILayout->WidgetTree->RootWidget))
+                    CursorWidget = CreateWidget<UNsUICursor>(LocalPlayerController, Settings->CursorWidgetClass.LoadSynchronous());
+                    if (CursorWidget != nullptr && ActiveUILayout->WidgetTree != nullptr)
                     {
-                        RootPanel->AddChild(CursorWidget);
-                        CursorWidget->SetVisibility(ESlateVisibility::Visible);
-                        UE_LOG(LogTemp, Warning, TEXT("Cursor was created successfully"));
+                        if (UPanelWidget* const RootPanel = Cast<UPanelWidget>(ActiveUILayout->WidgetTree->RootWidget))
+                        {
+                            RootPanel->AddChild(CursorWidget);
+                            CursorWidget->SetVisibility(ESlateVisibility::Visible);
+                            UE_LOG(LogTemp, Warning, TEXT("Cursor was created successfully"));
+                        }
                     }
                 }
             }
@@ -199,8 +195,11 @@ void UNsUISubsystem::InitializeCommandRegistry()
 
 void UNsUISubsystem::SetCurrentFocusedWidget(UWidget* const InNewFocus)
 {
-    CursorWidget->InvalidateLayoutAndVolatility();
-    
+    if (CursorWidget != nullptr)
+    {
+        CursorWidget->InvalidateLayoutAndVolatility();
+    }
+
     if (InNewFocus != nullptr && InNewFocus->GetOwningPlayer() != nullptr)
     {
         // Actually request keyboard focus for that widget:

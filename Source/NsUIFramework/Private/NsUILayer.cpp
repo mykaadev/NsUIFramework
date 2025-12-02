@@ -1,31 +1,42 @@
 // Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILayer.h"
-#include "INsUINavigation.h"
-#include "NsUISubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
-#include "Components/TextBlock.h"
+#include "INsUINavigation.h"
+#include "NsUISubsystem.h"
 
-void UNsUILayer::NativeConstruct()
+TSharedRef<class SWidget> UNsUILayer::RebuildWidget()
 {
-    Super::NativeConstruct();
-
-    if (LayerRoot == nullptr)
+    if (WidgetTree == nullptr)
     {
-        LayerRoot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("RootBorder"));
+        WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
+    }
+
+    if (WidgetTree->RootWidget == nullptr)
+    {
+        LayerRoot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("LayerRoot"));
+        WidgetTree->RootWidget = LayerRoot;
+
         LayerRoot->SetPadding(FMargin(0.f));
-        LayerRoot->SetBrushColor(FLinearColor::Transparent);
         LayerRoot->SetHorizontalAlignment(HAlign_Fill);
         LayerRoot->SetVerticalAlignment(VAlign_Fill);
 
-        WidgetTree->RootWidget = LayerRoot;
+        // Kill the white background
+        FSlateBrush Brush;
+        Brush.DrawAs = ESlateBrushDrawType::NoDrawType;
+        Brush.TintColor = FSlateColor(FLinearColor::Transparent);
+        LayerRoot->SetBrush(Brush);
 
-        const auto Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("DebugText"));
-        Text->SetText(FText::FromString(TEXT("Hello, world!")));
-        LayerRoot->SetContent(Text);
+        LayerRoot->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
     }
+    else
+    {
+        LayerRoot = Cast<UBorder>(WidgetTree->RootWidget);
+    }
+
+    return Super::RebuildWidget();
 }
 
 UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InClass)
@@ -41,13 +52,13 @@ UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InCl
                 PushWidget(NewWidget);
 
                 // create new stack element
-                UNsUIWidgetStackElement* NewStackElement = NewObject<UNsUIWidgetStackElement>(OwningPlayer);
+                UNsUIWidgetStackElement* const NewStackElement = NewObject<UNsUIWidgetStackElement>(OwningPlayer);
                 NewStackElement->WidgetScope = NewWidget;
                 NewStackElement->WidgetScopeFocusedElement = GetInitialFocusForWidget(NewWidget);
                 NewStackElement->InvokerWidgetScope = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScope : nullptr;
                 NewStackElement->InvokerElement = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScopeFocusedElement : nullptr;
                 NewStackElement->InvokerLayerType = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScopeLayerType : ENsUILayerType::None;
-                
+
                 // handle the push to the layer
                 CollapseTop();                      // hide the current top element
                 LayerRoot->ClearChildren();         // clear the root

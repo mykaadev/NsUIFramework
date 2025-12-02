@@ -19,7 +19,7 @@ class NSUIFRAMEWORK_API UNsUILayer : public UUserWidget
 public:
 
     //~ Begin UUserWidget Interface
-    virtual void NativeConstruct() override;
+    virtual TSharedRef<class SWidget> RebuildWidget() override;
     //~ End UUserWidget Interface
 
     /** Push content */
@@ -72,7 +72,7 @@ private:
 public:
 
     /** Border that contains our widget */
-    UPROPERTY(meta = (BindWidget))
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NsUI")
     TObjectPtr<class UBorder> LayerRoot;
 
 protected:
