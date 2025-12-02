@@ -13,7 +13,12 @@ UUserWidget* UNsUILibrary::AddWidgetToLayer(const TSoftClassPtr<UUserWidget>& In
 {
     if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
     {
-        return UISubsystem->PushWidgetToLayer(InWidget, InLayerType, bCollapsePrevious);
+        FNsUILayerTransitionRequest Request;
+        Request.LayerType = InLayerType;
+        Request.Operation = ENsUILayerTransitionOp::Push;
+        Request.WidgetClass = InWidget;
+        Request.bCollapsePrevious = bCollapsePrevious;
+        return UISubsystem->PushWidgetToLayer(InWidget, InLayerType, Request);
     }
     return nullptr;
 }
@@ -22,7 +27,12 @@ UUserWidget* UNsUILibrary::ReplaceTopWidgetOnLayer(const TSoftClassPtr<UUserWidg
 {
     if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
     {
-        return UISubsystem->ReplaceTopWidgetOnLayer(InWidget, InLayerType, bCollapsePrevious);
+        FNsUILayerTransitionRequest Request;
+        Request.LayerType = InLayerType;
+        Request.Operation = ENsUILayerTransitionOp::ReplaceTop;
+        Request.WidgetClass = InWidget;
+        Request.bCollapsePrevious = bCollapsePrevious;
+        return UISubsystem->ReplaceTopWidgetOnLayer(InWidget, InLayerType, Request);
     }
     return nullptr;
 }
@@ -56,6 +66,14 @@ void UNsUILibrary::ClearLayer(ENsUILayerType InLayerType)
     if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
     {
         UISubsystem->ClearLayer(InLayerType);
+    }
+}
+
+void UNsUILibrary::ClearAllLayers()
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        UISubsystem->ClearAllLayers();
     }
 }
 
@@ -135,6 +153,17 @@ AActor* UNsUILibrary::GetCurrentActorSelection()
         return UISubsystem->GetCurrentActorSelection();
     }
     return nullptr;
+}
+
+const TArray<FNsUIStateEvent>& UNsUILibrary::GetRecentStateEvents()
+{
+    if (UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem())
+    {
+        return UISubsystem->GetRecentStateEvents();
+    }
+
+    static const TArray<FNsUIStateEvent> Empty;
+    return Empty;
 }
 
 void UNsUILibrary::GatherAllNavigableDescendants(const UUserWidget* RootWidget, TArray<UWidget*>& OutNavigables)

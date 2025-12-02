@@ -48,20 +48,20 @@ bool UNsUILayout::UnregisterLayer(ENsUILayerType InLayerType)
     return RegisteredLayers.Remove(InLayerType) > 0;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass, bool bCollapsePrevious)
+UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass, const FNsUILayerTransitionRequest& Options)
 {
     if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        return (*FoundLayer)->PushClass(InWidgetClass, bCollapsePrevious);
+        return (*FoundLayer)->PushClass(InWidgetClass, Options);
     }
     return nullptr;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass, bool bCollapsePrevious)
+UNsUIWidgetStackElement* UNsUILayout::ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<UUserWidget>& InWidgetClass, const FNsUILayerTransitionRequest& Options)
 {
     if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
-        return (*FoundLayer)->ReplaceTopWithClass(InWidgetClass, bCollapsePrevious);
+        return (*FoundLayer)->ReplaceTopWithClass(InWidgetClass, Options);
     }
     return nullptr;
 }
@@ -80,6 +80,24 @@ UNsUIWidgetStackElement* UNsUILayout::RemoveWidgetFromLayer(ENsUILayerType InLay
     if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
     {
         return (*FoundLayer)->RemoveWidgetFromStack(InWidget);
+    }
+    return nullptr;
+}
+
+int32 UNsUILayout::RemoveWidgetsWithTag(ENsUILayerType InLayerType, FName Tag)
+{
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
+    {
+        return (*FoundLayer)->RemoveWidgetsWithTag(Tag);
+    }
+    return 0;
+}
+
+UNsUIWidgetStackElement* UNsUILayout::RemoveWidgetByStableId(ENsUILayerType InLayerType, const FGuid& StableId)
+{
+    if (UNsUILayer** FoundLayer = RegisteredLayers.Find(InLayerType))
+    {
+        return (*FoundLayer)->RemoveByStableId(StableId);
     }
     return nullptr;
 }

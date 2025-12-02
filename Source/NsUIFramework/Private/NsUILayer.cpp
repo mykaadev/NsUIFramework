@@ -6,15 +6,17 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/PanelWidget.h"
+#include "Framework/Application/SlateApplication.h"
 #include "NsUIWidget.h"
 
 void UNsUILayer::NativeConstruct()
 {
     Super::NativeConstruct();
     Stack.Reset();
+    PreviousFocusTarget.Reset();
 }
 
-UNsUIWidgetStackElement* UNsUILayer::CreateStackElement(UUserWidget* Widget, bool bCollapsedBelow) const
+UNsUIWidgetStackElement* UNsUILayer::CreateStackElement(UUserWidget* Widget, const FNsUILayerTransitionRequest& Options) const
 {
     if (!Widget)
     {
@@ -24,7 +26,10 @@ UNsUIWidgetStackElement* UNsUILayer::CreateStackElement(UUserWidget* Widget, boo
     UNsUIWidgetStackElement* Element = NewObject<UNsUIWidgetStackElement>(this);
     Element->Widget = Widget;
     Element->Layer = ENsUILayerType::None;
-    Element->bCollapsedEntryBelow = bCollapsedBelow;
+    Element->bCollapsedEntryBelow = Options.bCollapsePrevious && !Options.bKeepPreviousVisible;
+    Element->StableId = Options.StableId.IsValid() ? Options.StableId : FGuid::NewGuid();
+    Element->Tags = Options.Tags;
+    Element->Lifetime = Options.Lifetime;
     return Element;
 }
 
@@ -72,7 +77,39 @@ void UNsUILayer::NotifyWidgetPushed(UUserWidget* Widget) const
     }
 }
 
-void UNsUILayer::ShowTopAndRestoreFocus()
+void UNsUILayer::TrackFocusBeforeTransition()
+{
+    if (FSlateApplication::IsInitialized())
+    {
+        PreviousFocusTarget = FSlateApplication::Get().GetKeyboardFocusedWidget();
+    }
+}
+
+void UNsUILayer::RestorePreviousFocus()
+{
+    if (PreviousFocusTarget.IsValid())
+    {
+        PreviousFocusTarget->SetUserFocus(GetOwningPlayer(), EFocusCause::SetDirectly);
+    }
+}
+
+void UNsUILayer::CollapsePreviousIfNeeded(bool bCollapsePrevious) const
+{
+    if (!bCollapsePrevious)
+    {
+        return;
+    }
+
+    if (UNsUIWidgetStackElement* Top = Peek())
+    {
+        if (UUserWidget* TopWidget = Top->Widget.Get())
+        {
+            TopWidget->SetVisibility(ESlateVisibility::Collapsed);
+        }
+    }
+}
+
+void UNsUILayer::ShowTopAndRestoreFocus(ENsUIFocusRule FocusRule)
 {
     if (UNsUIWidgetStackElement* Top = Peek())
     {
@@ -89,16 +126,29 @@ void UNsUILayer::ShowTopAndRestoreFocus()
 
             Widget->SetVisibility(ESlateVisibility::Visible);
 
+            if (FocusRule == ENsUIFocusRule::None)
+            {
+                return;
+            }
+
+            if (FocusRule == ENsUIFocusRule::RestorePrevious)
+            {
+                RestorePreviousFocus();
+                return;
+            }
+
             if (INsUINavigation* Navigation = Cast<INsUINavigation>(Widget))
             {
                 if (UWidget* FocusTarget = Navigation->Execute_GetInitialFocusWidget(Widget))
                 {
                     FocusTarget->SetKeyboardFocus();
+                    return;
                 }
-                else
-                {
-                    Widget->SetKeyboardFocus();
-                }
+            }
+
+            if (FocusRule == ENsUIFocusRule::Auto && PreviousFocusTarget.IsValid())
+            {
+                RestorePreviousFocus();
             }
             else
             {
@@ -108,7 +158,7 @@ void UNsUILayer::ShowTopAndRestoreFocus()
     }
 }
 
-UNsUIWidgetStackElement* UNsUILayer::PushClass(const TSoftClassPtr<UUserWidget>& InClass, bool bCollapsePrevious)
+UNsUIWidgetStackElement* UNsUILayer::PushClass(const TSoftClassPtr<UUserWidget>& InClass, const FNsUILayerTransitionRequest& Options)
 {
     APlayerController* OwningPlayer = GetOwningPlayer();
     if (!OwningPlayer)
@@ -123,10 +173,10 @@ UNsUIWidgetStackElement* UNsUILayer::PushClass(const TSoftClassPtr<UUserWidget>&
     }
 
     UUserWidget* NewWidget = CreateWidget<UUserWidget>(OwningPlayer, WidgetClass);
-    return PushWidget(NewWidget, bCollapsePrevious);
+    return PushWidget(NewWidget, Options);
 }
 
-UNsUIWidgetStackElement* UNsUILayer::PushWidget(UUserWidget* InWidget, bool bCollapsePrevious)
+UNsUIWidgetStackElement* UNsUILayer::PushWidget(UUserWidget* InWidget, const FNsUILayerTransitionRequest& Options)
 {
     if (!InWidget)
     {
@@ -138,32 +188,24 @@ UNsUIWidgetStackElement* UNsUILayer::PushWidget(UUserWidget* InWidget, bool bCol
         return nullptr;
     }
 
-    if (bCollapsePrevious)
-    {
-        if (UNsUIWidgetStackElement* Top = Peek())
-        {
-            if (Top->Widget)
-            {
-                Top->Widget->SetVisibility(ESlateVisibility::Collapsed);
-            }
-        }
-    }
+    TrackFocusBeforeTransition();
+    CollapsePreviousIfNeeded(Options.bCollapsePrevious && !Options.bKeepPreviousVisible);
 
     AttachToLayer(InWidget);
 
-    UNsUIWidgetStackElement* Element = CreateStackElement(InWidget, bCollapsePrevious);
+    UNsUIWidgetStackElement* Element = CreateStackElement(InWidget, Options);
     Stack.Add(Element);
 
     NotifyWidgetPushed(InWidget);
-    ShowTopAndRestoreFocus();
+    ShowTopAndRestoreFocus(Options.FocusRule);
 
     return Element;
 }
 
-UNsUIWidgetStackElement* UNsUILayer::ReplaceTopWithClass(const TSoftClassPtr<UUserWidget>& InClass, bool bCollapsePrevious)
+UNsUIWidgetStackElement* UNsUILayer::ReplaceTopWithClass(const TSoftClassPtr<UUserWidget>& InClass, const FNsUILayerTransitionRequest& Options)
 {
     Pop();
-    return PushClass(InClass, bCollapsePrevious);
+    return PushClass(InClass, Options);
 }
 
 UNsUIWidgetStackElement* UNsUILayer::Pop()
@@ -173,7 +215,15 @@ UNsUIWidgetStackElement* UNsUILayer::Pop()
         return nullptr;
     }
 
-    UNsUIWidgetStackElement* Removed = Stack.Pop();
+    UNsUIWidgetStackElement* Removed = Stack.Last();
+    if (Removed && Removed->Lifetime == ENsUIWidgetLifetime::Pinned)
+    {
+        return nullptr;
+    }
+
+    TrackFocusBeforeTransition();
+
+    Removed = Stack.Pop();
     if (Removed && Removed->Widget)
     {
         DetachFromLayer(Removed->Widget);
@@ -201,6 +251,84 @@ UNsUIWidgetStackElement* UNsUILayer::RemoveWidgetFromStack(UUserWidget* InWidget
     }
 
     UNsUIWidgetStackElement* Removed = Stack[Index];
+    if (Removed && Removed->Lifetime == ENsUIWidgetLifetime::Pinned)
+    {
+        return nullptr;
+    }
+
+    TrackFocusBeforeTransition();
+    Stack.RemoveAt(Index);
+
+    if (Removed && Removed->Widget)
+    {
+        DetachFromLayer(Removed->Widget);
+    }
+
+    if (Index == Stack.Num())
+    {
+        ShowTopAndRestoreFocus();
+    }
+
+    return Removed;
+}
+
+int32 UNsUILayer::RemoveWidgetsWithTag(FName Tag)
+{
+    if (Tag.IsNone())
+    {
+        return 0;
+    }
+
+    TrackFocusBeforeTransition();
+
+    int32 RemovedCount = 0;
+    for (int32 Index = Stack.Num() - 1; Index >= 0; --Index)
+    {
+        if (UNsUIWidgetStackElement* Element = Stack[Index])
+        {
+            if (Element->Tags.Contains(Tag))
+            {
+                if (Element->Lifetime != ENsUIWidgetLifetime::Pinned)
+                {
+                    if (Element->Widget)
+                    {
+                        DetachFromLayer(Element->Widget);
+                    }
+                    Stack.RemoveAt(Index);
+                    ++RemovedCount;
+                }
+            }
+        }
+    }
+
+    ShowTopAndRestoreFocus();
+    return RemovedCount;
+}
+
+UNsUIWidgetStackElement* UNsUILayer::RemoveByStableId(const FGuid& StableId)
+{
+    if (!StableId.IsValid())
+    {
+        return nullptr;
+    }
+
+    const int32 Index = Stack.IndexOfByPredicate([StableId](const UNsUIWidgetStackElement* Element)
+    {
+        return Element && Element->StableId == StableId;
+    });
+
+    if (Index == INDEX_NONE)
+    {
+        return nullptr;
+    }
+
+    UNsUIWidgetStackElement* Removed = Stack[Index];
+    if (Removed && Removed->Lifetime == ENsUIWidgetLifetime::Pinned)
+    {
+        return nullptr;
+    }
+
+    TrackFocusBeforeTransition();
     Stack.RemoveAt(Index);
 
     if (Removed && Removed->Widget)
@@ -218,9 +346,10 @@ UNsUIWidgetStackElement* UNsUILayer::RemoveWidgetFromStack(UUserWidget* InWidget
 
 void UNsUILayer::ClearStack()
 {
+    TrackFocusBeforeTransition();
     for (UNsUIWidgetStackElement* Element : Stack)
     {
-        if (Element && Element->Widget)
+        if (Element && Element->Widget && Element->Lifetime != ENsUIWidgetLifetime::Pinned)
         {
             DetachFromLayer(Element->Widget);
         }
@@ -232,6 +361,8 @@ void UNsUILayer::ClearStack()
     {
         LayerRoot->SetContent(nullptr);
     }
+
+    RestorePreviousFocus();
 }
 
 TArray<UNsUIWidgetStackElement*> UNsUILayer::Unwind()

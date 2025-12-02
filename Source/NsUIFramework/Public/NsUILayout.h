@@ -25,16 +25,22 @@ public:
     bool UnregisterLayer(ENsUILayerType InLayerType);
 
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
-    class UNsUIWidgetStackElement* PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass, bool bCollapsePrevious = true);
+    class UNsUIWidgetStackElement* PushContentToLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass, const FNsUILayerTransitionRequest& Options);
 
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
-    class UNsUIWidgetStackElement* ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass, bool bCollapsePrevious = true);
+    class UNsUIWidgetStackElement* ReplaceTopWidgetOnLayer(ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass, const FNsUILayerTransitionRequest& Options);
 
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     class UNsUIWidgetStackElement* PopContentFromLayer(ENsUILayerType InLayerType);
 
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     class UNsUIWidgetStackElement* RemoveWidgetFromLayer(ENsUILayerType InLayerType, class UUserWidget* InWidget);
+
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
+    int32 RemoveWidgetsWithTag(ENsUILayerType InLayerType, FName Tag);
+
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
+    class UNsUIWidgetStackElement* RemoveWidgetByStableId(ENsUILayerType InLayerType, const FGuid& StableId);
 
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layout")
     void ClearLayer(ENsUILayerType InLayerType);

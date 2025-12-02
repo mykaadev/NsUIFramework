@@ -23,15 +23,15 @@ public:
 
     /** Push a widget class onto the layer stack. Optionally collapse the previous top entry. */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
-    class UNsUIWidgetStackElement* PushClass(const TSoftClassPtr<class UUserWidget>& InClass, bool bCollapsePrevious = true);
+    class UNsUIWidgetStackElement* PushClass(const TSoftClassPtr<class UUserWidget>& InClass, const FNsUILayerTransitionRequest& Options);
 
     /** Push an existing widget instance. Optionally collapse the previous top entry. */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
-    class UNsUIWidgetStackElement* PushWidget(class UUserWidget* InWidget, bool bCollapsePrevious = true);
+    class UNsUIWidgetStackElement* PushWidget(class UUserWidget* InWidget, const FNsUILayerTransitionRequest& Options);
 
     /** Replace the current top widget with a new class instance. */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
-    class UNsUIWidgetStackElement* ReplaceTopWithClass(const TSoftClassPtr<class UUserWidget>& InClass, bool bCollapsePrevious = true);
+    class UNsUIWidgetStackElement* ReplaceTopWithClass(const TSoftClassPtr<class UUserWidget>& InClass, const FNsUILayerTransitionRequest& Options);
 
     /** Pop the top widget from the layer. */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
@@ -40,6 +40,14 @@ public:
     /** Remove a specific widget from the stack (no blind popping required). */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
     class UNsUIWidgetStackElement* RemoveWidgetFromStack(class UUserWidget* InWidget);
+
+    /** Remove widgets by tag. */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
+    int32 RemoveWidgetsWithTag(FName Tag);
+
+    /** Remove by stable identifier. */
+    UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
+    class UNsUIWidgetStackElement* RemoveByStableId(const FGuid& StableId);
 
     /** Clear the layer entirely. */
     UFUNCTION(BlueprintCallable, Category = "Ns UI Framework|Layer")
@@ -58,11 +66,14 @@ public:
     const TArray<class UNsUIWidgetStackElement*>& GetStack() const { return Stack; }
 
 private:
-    UNsUIWidgetStackElement* CreateStackElement(UUserWidget* Widget, bool bCollapsedBelow) const;
+    UNsUIWidgetStackElement* CreateStackElement(UUserWidget* Widget, const FNsUILayerTransitionRequest& Options) const;
     void AttachToLayer(UUserWidget* Widget) const;
     void DetachFromLayer(UUserWidget* Widget) const;
-    void ShowTopAndRestoreFocus();
+    void ShowTopAndRestoreFocus(ENsUIFocusRule FocusRule = ENsUIFocusRule::Auto);
     void NotifyWidgetPushed(UUserWidget* Widget) const;
+    void CollapsePreviousIfNeeded(bool bCollapsePrevious) const;
+    void TrackFocusBeforeTransition();
+    void RestorePreviousFocus();
 
 public:
     /** Root slot when showing a single widget at a time. */
@@ -73,8 +84,16 @@ public:
     UPROPERTY(meta = (BindWidgetOptional))
     TObjectPtr<UPanelWidget> LayerPanel = nullptr;
 
+    /** Priority for focus and routing. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ns UI Framework|Layer")
+    ENsUILayerPriority LayerPriority = ENsUILayerPriority::Menu;
+
 protected:
     /** Stack of widgets owned by this layer. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ns UI Framework|Layer")
     TArray<class UNsUIWidgetStackElement*> Stack;
+
+    /** Cached focus target before a transition to support deterministic restoration. */
+    UPROPERTY(Transient)
+    TWeakObjectPtr<class UWidget> PreviousFocusTarget;
 };

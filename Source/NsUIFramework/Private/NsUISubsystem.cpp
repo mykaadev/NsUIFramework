@@ -39,6 +39,7 @@ void UNsUISubsystem::Deinitialize()
     RetroCursor = nullptr;
     ActorSelectionCandidates.Empty();
     ActorSelectionIndex = INDEX_NONE;
+    RecentStateEvents.Empty();
 
     Super::Deinitialize();
 }
@@ -65,29 +66,41 @@ UNsUISubsystem* UNsUISubsystem::GetSubsystem()
     return nullptr;
 }
 
-UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious)
+UUserWidget* UNsUISubsystem::PushWidgetToLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType, const FNsUILayerTransitionRequest& Options)
 {
     if (!ActiveUILayout)
     {
         return nullptr;
     }
 
-    if (UNsUIWidgetStackElement* StackElement = ActiveUILayout->PushContentToLayer(InLayerType, InWidget, bCollapsePrevious))
+    FNsUILayerTransitionRequest LocalOptions = Options;
+    LocalOptions.LayerType = InLayerType;
+    LocalOptions.WidgetClass = InWidget;
+
+    if (UNsUIWidgetStackElement* StackElement = ActiveUILayout->PushContentToLayer(InLayerType, InWidget, LocalOptions))
     {
+        StackElement->Layer = InLayerType;
+        LogStateEvent(StackElement, ENsUILayerTransitionOp::Push);
         return StackElement->Widget.Get();
     }
     return nullptr;
 }
 
-UUserWidget* UNsUISubsystem::ReplaceTopWidgetOnLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious)
+UUserWidget* UNsUISubsystem::ReplaceTopWidgetOnLayer(const TSoftClassPtr<UUserWidget>& InWidget, ENsUILayerType InLayerType, const FNsUILayerTransitionRequest& Options)
 {
     if (!ActiveUILayout)
     {
         return nullptr;
     }
 
-    if (UNsUIWidgetStackElement* StackElement = ActiveUILayout->ReplaceTopWidgetOnLayer(InLayerType, InWidget, bCollapsePrevious))
+    FNsUILayerTransitionRequest LocalOptions = Options;
+    LocalOptions.LayerType = InLayerType;
+    LocalOptions.WidgetClass = InWidget;
+
+    if (UNsUIWidgetStackElement* StackElement = ActiveUILayout->ReplaceTopWidgetOnLayer(InLayerType, InWidget, LocalOptions))
     {
+        StackElement->Layer = InLayerType;
+        LogStateEvent(StackElement, ENsUILayerTransitionOp::ReplaceTop);
         return StackElement->Widget.Get();
     }
     return nullptr;
@@ -97,7 +110,10 @@ void UNsUISubsystem::PopWidgetFromLayer(ENsUILayerType InLayerType)
 {
     if (ActiveUILayout)
     {
-        ActiveUILayout->PopContentFromLayer(InLayerType);
+        if (UNsUIWidgetStackElement* Element = ActiveUILayout->PopContentFromLayer(InLayerType))
+        {
+            LogStateEvent(Element, ENsUILayerTransitionOp::Pop);
+        }
     }
 }
 
@@ -105,7 +121,11 @@ void UNsUISubsystem::UnwindLayer(ENsUILayerType InLayerType)
 {
     if (ActiveUILayout)
     {
-        ActiveUILayout->UnwindLayer(InLayerType);
+        const TArray<UNsUIWidgetStackElement*> Removed = ActiveUILayout->UnwindLayer(InLayerType);
+        for (UNsUIWidgetStackElement* Element : Removed)
+        {
+            LogStateEvent(Element, ENsUILayerTransitionOp::Unwind);
+        }
     }
 }
 
@@ -113,7 +133,31 @@ void UNsUISubsystem::RemoveWidgetFromLayer(ENsUILayerType InLayerType, UUserWidg
 {
     if (ActiveUILayout)
     {
-        ActiveUILayout->RemoveWidgetFromLayer(InLayerType, InWidget);
+        if (UNsUIWidgetStackElement* Element = ActiveUILayout->RemoveWidgetFromLayer(InLayerType, InWidget))
+        {
+            LogStateEvent(Element, ENsUILayerTransitionOp::Remove);
+        }
+    }
+}
+
+int32 UNsUISubsystem::RemoveWidgetsWithTag(ENsUILayerType InLayerType, FName Tag)
+{
+    int32 Count = 0;
+    if (ActiveUILayout)
+    {
+        Count = ActiveUILayout->RemoveWidgetsWithTag(InLayerType, Tag);
+    }
+    return Count;
+}
+
+void UNsUISubsystem::RemoveWidgetByStableId(ENsUILayerType InLayerType, const FGuid& StableId)
+{
+    if (ActiveUILayout)
+    {
+        if (UNsUIWidgetStackElement* Element = ActiveUILayout->RemoveWidgetByStableId(InLayerType, StableId))
+        {
+            LogStateEvent(Element, ENsUILayerTransitionOp::Remove);
+        }
     }
 }
 
@@ -125,29 +169,69 @@ void UNsUISubsystem::ClearLayer(ENsUILayerType InLayerType)
     }
 }
 
+void UNsUISubsystem::ClearAllLayers()
+{
+    if (ActiveUILayout)
+    {
+        ActiveUILayout->ClearAllLayers();
+    }
+}
+
 UNsUIWidgetStackElement* UNsUISubsystem::ApplyLayerTransition(const FNsUILayerTransitionRequest& Request)
 {
-    switch (Request.Operation)
+    if (!ActiveUILayout)
     {
-    case ENsUILayerTransitionOp::Push:
-        return ActiveUILayout ? ActiveUILayout->PushContentToLayer(Request.LayerType, Request.WidgetClass, Request.bCollapsePrevious) : nullptr;
-    case ENsUILayerTransitionOp::ReplaceTop:
-        return ActiveUILayout ? ActiveUILayout->ReplaceTopWidgetOnLayer(Request.LayerType, Request.WidgetClass, Request.bCollapsePrevious) : nullptr;
-    case ENsUILayerTransitionOp::Pop:
-        return ActiveUILayout ? ActiveUILayout->PopContentFromLayer(Request.LayerType) : nullptr;
-    case ENsUILayerTransitionOp::Remove:
-        return ActiveUILayout ? ActiveUILayout->RemoveWidgetFromLayer(Request.LayerType, Request.WidgetInstance) : nullptr;
-    case ENsUILayerTransitionOp::ClearLayer:
-        if (ActiveUILayout)
-        {
-            ActiveUILayout->ClearLayer(Request.LayerType);
-        }
-        return nullptr;
-    case ENsUILayerTransitionOp::Unwind:
-        return ActiveUILayout ? ActiveUILayout->UnwindLayer(Request.LayerType).Last(nullptr) : nullptr;
-    default:
         return nullptr;
     }
+
+    FNsUILayerTransitionRequest LocalRequest = Request;
+
+    switch (LocalRequest.Operation)
+    {
+    case ENsUILayerTransitionOp::Push:
+        if (UNsUIWidgetStackElement* Element = ActiveUILayout->PushContentToLayer(LocalRequest.LayerType, LocalRequest.WidgetClass, LocalRequest))
+        {
+            Element->Layer = LocalRequest.LayerType;
+            LogStateEvent(Element, ENsUILayerTransitionOp::Push);
+            return Element;
+        }
+        return nullptr;
+    case ENsUILayerTransitionOp::ReplaceTop:
+        if (UNsUIWidgetStackElement* Element = ActiveUILayout->ReplaceTopWidgetOnLayer(LocalRequest.LayerType, LocalRequest.WidgetClass, LocalRequest))
+        {
+            Element->Layer = LocalRequest.LayerType;
+            LogStateEvent(Element, ENsUILayerTransitionOp::ReplaceTop);
+            return Element;
+        }
+        return nullptr;
+    case ENsUILayerTransitionOp::Pop:
+        if (UNsUIWidgetStackElement* Element = ActiveUILayout->PopContentFromLayer(LocalRequest.LayerType))
+        {
+            LogStateEvent(Element, ENsUILayerTransitionOp::Pop);
+            return Element;
+        }
+        return nullptr;
+    case ENsUILayerTransitionOp::Remove:
+        if (UNsUIWidgetStackElement* Element = ActiveUILayout->RemoveWidgetFromLayer(LocalRequest.LayerType, LocalRequest.WidgetInstance))
+        {
+            LogStateEvent(Element, ENsUILayerTransitionOp::Remove);
+            return Element;
+        }
+        return nullptr;
+    case ENsUILayerTransitionOp::ClearLayer:
+        ActiveUILayout->ClearLayer(LocalRequest.LayerType);
+        return nullptr;
+    case ENsUILayerTransitionOp::Unwind:
+        ActiveUILayout->UnwindLayer(LocalRequest.LayerType);
+        return nullptr;
+    case ENsUILayerTransitionOp::ClearAll:
+        ActiveUILayout->ClearAllLayers();
+        return nullptr;
+    default:
+        break;
+    }
+
+    return nullptr;
 }
 
 void UNsUISubsystem::DestroyActiveLayout()
@@ -348,5 +432,22 @@ void UNsUISubsystem::UpdateRetroCursorFromActorSelection()
         }
 
         Cursor->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+
+void UNsUISubsystem::LogStateEvent(const UNsUIWidgetStackElement* Element, ENsUILayerTransitionOp Op)
+{
+    FNsUIStateEvent Event;
+    Event.Layer = Element ? Element->Layer : ENsUILayerType::None;
+    Event.Operation = Op;
+    Event.Widget = Element ? Element->Widget : nullptr;
+    Event.StableId = Element ? Element->StableId : FGuid();
+    Event.Tags = Element ? Element->Tags : TArray<FName>();
+
+    RecentStateEvents.Add(Event);
+    const int32 MaxEvents = 32;
+    while (RecentStateEvents.Num() > MaxEvents)
+    {
+        RecentStateEvents.RemoveAt(0);
     }
 }

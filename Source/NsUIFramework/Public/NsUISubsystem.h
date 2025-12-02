@@ -36,10 +36,10 @@ public:
     static UNsUISubsystem* GetSubsystem();
 
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
-    class UUserWidget* PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious = true);
+    class UUserWidget* PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType, const FNsUILayerTransitionRequest& Options);
 
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
-    class UUserWidget* ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType, bool bCollapsePrevious = true);
+    class UUserWidget* ReplaceTopWidgetOnLayer(const TSoftClassPtr<class UUserWidget>& InWidget, ENsUILayerType InLayerType, const FNsUILayerTransitionRequest& Options);
 
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
     void PopWidgetFromLayer(ENsUILayerType InLayerType);
@@ -51,7 +51,16 @@ public:
     void RemoveWidgetFromLayer(ENsUILayerType InLayerType, class UUserWidget* InWidget);
 
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
+    int32 RemoveWidgetsWithTag(ENsUILayerType InLayerType, FName Tag);
+
+    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
+    void RemoveWidgetByStableId(ENsUILayerType InLayerType, const FGuid& StableId);
+
+    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
     void ClearLayer(ENsUILayerType InLayerType);
+
+    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
+    void ClearAllLayers();
 
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Layers")
     class UNsUIWidgetStackElement* ApplyLayerTransition(const FNsUILayerTransitionRequest& Request);
@@ -88,10 +97,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Actor Selection")
     class AActor* StepActorSelection(int32 Direction, bool bSnapCursorToSelection = true);
 
+    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem|Telemetry")
+    const TArray<FNsUIStateEvent>& GetRecentStateEvents() const { return RecentStateEvents; }
+
 private:
     void DestroyActiveLayout();
     void UpdateRetroCursorFromActorSelection();
     bool ProjectActorToScreen(const AActor* Actor, FVector2D& OutScreenPos) const;
+    void LogStateEvent(const UNsUIWidgetStackElement* Element, ENsUILayerTransitionOp Op);
 
 private:
     UPROPERTY()
@@ -111,4 +124,7 @@ private:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NS UI Subsystem|Actor Selection")
     bool bCursorTracksActorSelection = true;
+
+    UPROPERTY()
+    TArray<FNsUIStateEvent> RecentStateEvents;
 };
