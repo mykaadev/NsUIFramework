@@ -6,6 +6,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Components/PanelWidget.h"
 #include "NsUISubsystem.h"
+#include "NsUIWidget.h"
 
 void UNsUILibrary::GatherAllNavigableDescendants(const UUserWidget* InRootWidget, TArray<UWidget*>& InOutNavigables)
 {
@@ -53,6 +54,71 @@ UWidget* UNsUILibrary::FindFirstFocusableDescendant(const UUserWidget* InRootWid
     TArray<UWidget*> Navigables;
     GatherAllNavigableDescendants(InRootWidget, Navigables);
     return Navigables.IsValidIndex(0) ? Navigables[0] : nullptr;
+}
+
+namespace
+{
+static const FName GameStaticLayerName(TEXT("GameStatic"));
+static const FName GameMenuLayerName(TEXT("GameMenu"));
+static const FName GameModalLayerName(TEXT("GameModal"));
+static const FName ApplicationStaticLayerName(TEXT("ApplicationStatic"));
+static const FName ApplicationMenuLayerName(TEXT("ApplicationMenu"));
+static const FName ApplicationModalLayerName(TEXT("ApplicationModal"));
+}
+
+FName UNsUILibrary::GetLayerName(ENsUILayer Layer)
+{
+    switch (Layer)
+    {
+    case ENsUILayer::GameStatic:
+        return GameStaticLayerName;
+    case ENsUILayer::GameMenu:
+        return GameMenuLayerName;
+    case ENsUILayer::GameModal:
+        return GameModalLayerName;
+    case ENsUILayer::ApplicationStatic:
+        return ApplicationStaticLayerName;
+    case ENsUILayer::ApplicationMenu:
+        return ApplicationMenuLayerName;
+    case ENsUILayer::ApplicationModal:
+        return ApplicationModalLayerName;
+    default:
+        return NAME_None;
+    }
+}
+
+UNsUIWidget* UNsUILibrary::PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer)
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        return Subsystem->PushWidget(WidgetClass, GetLayerName(Layer));
+    }
+    return nullptr;
+}
+
+bool UNsUILibrary::PushWidgetInstanceToLayer(UNsUIWidget* Widget, ENsUILayer Layer)
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        return Subsystem->PushWidgetInstance(Widget, GetLayerName(Layer));
+    }
+    return false;
+}
+
+void UNsUILibrary::PopLayer(ENsUILayer Layer)
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        Subsystem->PopWidget(GetLayerName(Layer));
+    }
+}
+
+void UNsUILibrary::PopLayerToRoot(ENsUILayer Layer)
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        Subsystem->PopToRoot(GetLayerName(Layer));
+    }
 }
 
 void UNsUILibrary::RegisterActorsForSelection(const TArray<AActor*>& Actors,

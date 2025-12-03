@@ -4,10 +4,24 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Templates/SubclassOf.h"
 #include "NsUILibrary.generated.h"
 
 class UUserWidget;
 class UWidget;
+class UNsUIWidget;
+
+/** Built-in layer slots that the default layout creates. */
+UENUM(BlueprintType)
+enum class ENsUILayer : uint8
+{
+    GameStatic,
+    GameMenu,
+    GameModal,
+    ApplicationStatic,
+    ApplicationMenu,
+    ApplicationModal
+};
 
 /** Delegate used to notify about actor interactions */
 DECLARE_MULTICAST_DELEGATE_OneParam(FNsUIActorDelegate, AActor*);
@@ -34,6 +48,26 @@ public:
 
     /** Find the first focusable descendant of a widget. */
     static UWidget* FindFirstFocusableDescendant(const UUserWidget* InRootWidget);
+
+    /** Translate an enum layer into the FName used by the framework. */
+    UFUNCTION(BlueprintPure, Category = "NsUI|Layers")
+    static FName GetLayerName(ENsUILayer Layer);
+
+    /** Convenience wrapper to push a widget class onto a named layer. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
+    static UNsUIWidget* PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer);
+
+    /** Convenience wrapper to push an existing widget instance onto a named layer. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
+    static bool PushWidgetInstanceToLayer(UNsUIWidget* Widget, ENsUILayer Layer);
+
+    /** Pop the top widget off the given layer. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
+    static void PopLayer(ENsUILayer Layer);
+
+    /** Pop all widgets back to the root entry on the given layer. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
+    static void PopLayerToRoot(ENsUILayer Layer);
 
     /** Convenience helper to register actors for selection and bind callbacks. */
     static void RegisterActorsForSelection(const TArray<AActor*>& Actors,
