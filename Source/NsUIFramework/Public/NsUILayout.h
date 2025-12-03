@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "NsUILibrary.h"
 #include "NsUILayout.generated.h"
 
 class UNsUILayer;
@@ -20,20 +21,20 @@ class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
 public:
     virtual void NativeOnInitialized() override;
 
-    /** Register a layer with a friendly name. */
+    /** Register a layer against its enum slot. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    void RegisterLayer(FName LayerName, UNsUILayer* Layer);
+    void RegisterLayer(ENsUILayer LayerSlot, UNsUILayer* Layer);
 
     /** Remove a registered layer. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    bool UnregisterLayer(FName LayerName);
+    bool UnregisterLayer(ENsUILayer LayerSlot);
 
-    /** Retrieve a layer by name. */
+    /** Retrieve a layer by enum. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    UNsUILayer* GetLayer(FName LayerName) const;
+    UNsUILayer* GetLayer(ENsUILayer LayerSlot) const;
 
     /** Access to registered layers for internal queries. */
-    const TMap<FName, TObjectPtr<UNsUILayer>>& GetRegisteredLayers() const { return RegisteredLayers; }
+    const TMap<ENsUILayer, TObjectPtr<UNsUILayer>>& GetRegisteredLayers() const { return RegisteredLayers; }
 
     /** Clear all stacks in all layers. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
@@ -44,23 +45,11 @@ private:
 
 private:
     UPROPERTY(meta = (BindWidgetOptional))
-    TObjectPtr<UNsUILayer> GameStaticLayer;
+    TObjectPtr<UNsUILayer> MenuLayer;
 
     UPROPERTY(meta = (BindWidgetOptional))
-    TObjectPtr<UNsUILayer> GameMenuLayer;
-
-    UPROPERTY(meta = (BindWidgetOptional))
-    TObjectPtr<UNsUILayer> GameModalLayer;
-
-    UPROPERTY(meta = (BindWidgetOptional))
-    TObjectPtr<UNsUILayer> ApplicationStaticLayer;
-
-    UPROPERTY(meta = (BindWidgetOptional))
-    TObjectPtr<UNsUILayer> ApplicationMenuLayer;
-
-    UPROPERTY(meta = (BindWidgetOptional))
-    TObjectPtr<UNsUILayer> ApplicationModalLayer;
+    TObjectPtr<UNsUILayer> ModalLayer;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NsUI", meta = (AllowPrivateAccess = "true"))
-    TMap<FName, TObjectPtr<UNsUILayer>> RegisteredLayers;
+    TMap<ENsUILayer, TObjectPtr<UNsUILayer>> RegisteredLayers;
 };

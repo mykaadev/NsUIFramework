@@ -154,7 +154,7 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<UNsUILayout>& InLayou
     }
 }
 
-UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, FName LayerName)
+UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer LayerName)
 {
     if (!WidgetClass)
     {
@@ -176,7 +176,7 @@ UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, FN
     return nullptr;
 }
 
-bool UNsUISubsystem::PushWidgetInstance(UNsUIWidget* Widget, FName LayerName)
+bool UNsUISubsystem::PushWidgetInstance(UNsUIWidget* Widget, ENsUILayer LayerName)
 {
     if (UNsUILayer* Layer = FindLayer(LayerName))
     {
@@ -186,7 +186,7 @@ bool UNsUISubsystem::PushWidgetInstance(UNsUIWidget* Widget, FName LayerName)
     return false;
 }
 
-void UNsUISubsystem::PopWidget(FName LayerName)
+void UNsUISubsystem::PopWidget(ENsUILayer LayerName)
 {
     if (UNsUILayer* Layer = FindLayer(LayerName))
     {
@@ -194,7 +194,7 @@ void UNsUISubsystem::PopWidget(FName LayerName)
     }
 }
 
-void UNsUISubsystem::PopToRoot(FName LayerName)
+void UNsUISubsystem::PopToRoot(ENsUILayer LayerName)
 {
     if (UNsUILayer* Layer = FindLayer(LayerName))
     {
@@ -366,7 +366,7 @@ void UNsUISubsystem::NotifyWidgetFocusLost(UWidget* Widget)
     }
 }
 
-UNsUILayer* UNsUISubsystem::FindLayer(FName LayerName) const
+UNsUILayer* UNsUISubsystem::FindLayer(ENsUILayer LayerName) const
 {
     return ActiveUILayout ? ActiveUILayout->GetLayer(LayerName) : nullptr;
 }

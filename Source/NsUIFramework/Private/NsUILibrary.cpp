@@ -58,30 +58,18 @@ UWidget* UNsUILibrary::FindFirstFocusableDescendant(const UUserWidget* InRootWid
 
 namespace
 {
-static const FName GameStaticLayerName(TEXT("GameStatic"));
-static const FName GameMenuLayerName(TEXT("GameMenu"));
-static const FName GameModalLayerName(TEXT("GameModal"));
-static const FName ApplicationStaticLayerName(TEXT("ApplicationStatic"));
-static const FName ApplicationMenuLayerName(TEXT("ApplicationMenu"));
-static const FName ApplicationModalLayerName(TEXT("ApplicationModal"));
+static const FName MenuLayerName(TEXT("Menu"));
+static const FName ModalLayerName(TEXT("Modal"));
 }
 
 FName UNsUILibrary::GetLayerName(ENsUILayer Layer)
 {
     switch (Layer)
     {
-    case ENsUILayer::GameStatic:
-        return GameStaticLayerName;
-    case ENsUILayer::GameMenu:
-        return GameMenuLayerName;
-    case ENsUILayer::GameModal:
-        return GameModalLayerName;
-    case ENsUILayer::ApplicationStatic:
-        return ApplicationStaticLayerName;
-    case ENsUILayer::ApplicationMenu:
-        return ApplicationMenuLayerName;
-    case ENsUILayer::ApplicationModal:
-        return ApplicationModalLayerName;
+    case ENsUILayer::Menu:
+        return MenuLayerName;
+    case ENsUILayer::Modal:
+        return ModalLayerName;
     default:
         return NAME_None;
     }
@@ -91,7 +79,7 @@ UNsUIWidget* UNsUILibrary::PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClas
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
-        return Subsystem->PushWidget(WidgetClass, GetLayerName(Layer));
+        return Subsystem->PushWidget(WidgetClass, Layer);
     }
     return nullptr;
 }
@@ -100,7 +88,7 @@ bool UNsUILibrary::PushWidgetInstanceToLayer(UNsUIWidget* Widget, ENsUILayer Lay
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
-        return Subsystem->PushWidgetInstance(Widget, GetLayerName(Layer));
+        return Subsystem->PushWidgetInstance(Widget, Layer);
     }
     return false;
 }
@@ -109,7 +97,7 @@ void UNsUILibrary::PopLayer(ENsUILayer Layer)
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
-        Subsystem->PopWidget(GetLayerName(Layer));
+        Subsystem->PopWidget(Layer);
     }
 }
 
@@ -117,7 +105,7 @@ void UNsUILibrary::PopLayerToRoot(ENsUILayer Layer)
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
-        Subsystem->PopToRoot(GetLayerName(Layer));
+        Subsystem->PopToRoot(Layer);
     }
 }
 

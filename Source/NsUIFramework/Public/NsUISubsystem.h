@@ -47,21 +47,21 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NsUI")
     UNsUILayout* GetActiveUILayout() const { return ActiveUILayout; }
 
-    /** Push a widget class onto the named layer. Returns the created instance. */
+    /** Push a widget class onto the specified layer. Returns the created instance. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    UNsUIWidget* PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, FName LayerName);
+    UNsUIWidget* PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer);
 
-    /** Push an existing widget instance onto the named layer. */
+    /** Push an existing widget instance onto the specified layer. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    bool PushWidgetInstance(UNsUIWidget* Widget, FName LayerName);
+    bool PushWidgetInstance(UNsUIWidget* Widget, ENsUILayer Layer);
 
-    /** Pop the top widget from the named layer. */
+    /** Pop the top widget from the specified layer. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    void PopWidget(FName LayerName);
+    void PopWidget(ENsUILayer Layer);
 
-    /** Pop all widgets from the named layer back to its root. */
+    /** Pop all widgets from the specified layer back to its root. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    void PopToRoot(FName LayerName);
+    void PopToRoot(ENsUILayer Layer);
 
     /** Navigation entry point the game can call from Enhanced Input. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Input")
@@ -103,7 +103,7 @@ public:
 
 private:
     void SetupNavigationConfig();
-    UNsUILayer* FindLayer(FName LayerName) const;
+    UNsUILayer* FindLayer(ENsUILayer Layer) const;
     UNsUILayer* FindLayerForWidget(const UWidget* Widget) const;
     void MoveFocusToWidget(UWidget* TargetWidget);
     UWidget* ResolveEngineNavigation(UWidget* FromWidget, EUINavigation Direction) const;

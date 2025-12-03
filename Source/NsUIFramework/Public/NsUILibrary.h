@@ -15,12 +15,8 @@ class UNsUIWidget;
 UENUM(BlueprintType)
 enum class ENsUILayer : uint8
 {
-    GameStatic,
-    GameMenu,
-    GameModal,
-    ApplicationStatic,
-    ApplicationMenu,
-    ApplicationModal
+    Menu,
+    Modal
 };
 
 /** Delegate used to notify about actor interactions */

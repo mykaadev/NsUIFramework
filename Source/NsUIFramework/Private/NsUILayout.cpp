@@ -13,31 +13,31 @@ void UNsUILayout::NativeOnInitialized()
     EnsureDefaultLayers();
 }
 
-void UNsUILayout::RegisterLayer(FName LayerName, UNsUILayer* Layer)
+void UNsUILayout::RegisterLayer(ENsUILayer LayerSlot, UNsUILayer* Layer)
 {
-    if (!LayerName.IsNone() && Layer != nullptr)
+    if (Layer != nullptr)
     {
-        RegisteredLayers.FindOrAdd(LayerName) = Layer;
+        RegisteredLayers.FindOrAdd(LayerSlot) = Layer;
     }
 }
 
-bool UNsUILayout::UnregisterLayer(FName LayerName)
+bool UNsUILayout::UnregisterLayer(ENsUILayer LayerSlot)
 {
-    if (UNsUILayer** Found = RegisteredLayers.Find(LayerName))
+    if (UNsUILayer** Found = RegisteredLayers.Find(LayerSlot))
     {
         if (UNsUILayer* Layer = *Found)
         {
             Layer->RemoveFromParent();
         }
-        RegisteredLayers.Remove(LayerName);
+        RegisteredLayers.Remove(LayerSlot);
         return true;
     }
     return false;
 }
 
-UNsUILayer* UNsUILayout::GetLayer(FName LayerName) const
+UNsUILayer* UNsUILayout::GetLayer(ENsUILayer LayerSlot) const
 {
-    if (const TObjectPtr<UNsUILayer>* Found = RegisteredLayers.Find(LayerName))
+    if (const TObjectPtr<UNsUILayer>* Found = RegisteredLayers.Find(LayerSlot))
     {
         return Found->Get();
     }
@@ -69,7 +69,7 @@ void UNsUILayout::EnsureDefaultLayers()
         WidgetTree->RootWidget = RootOverlay;
     }
 
-    auto EnsureLayer = [&](TObjectPtr<UNsUILayer>& Slot, const FName Name)
+    auto EnsureLayer = [&](TObjectPtr<UNsUILayer>& Slot, const FName Name, ENsUILayer LayerKey)
     {
         if (Slot == nullptr)
         {
@@ -86,14 +86,10 @@ void UNsUILayout::EnsureDefaultLayers()
 
         if (Slot)
         {
-            RegisterLayer(Name, Slot);
+            RegisterLayer(LayerKey, Slot);
         }
     };
 
-    EnsureLayer(GameStaticLayer, TEXT("GameStatic"));
-    EnsureLayer(GameMenuLayer, TEXT("GameMenu"));
-    EnsureLayer(GameModalLayer, TEXT("GameModal"));
-    EnsureLayer(ApplicationStaticLayer, TEXT("ApplicationStatic"));
-    EnsureLayer(ApplicationMenuLayer, TEXT("ApplicationMenu"));
-    EnsureLayer(ApplicationModalLayer, TEXT("ApplicationModal"));
+    EnsureLayer(MenuLayer, TEXT("Menu"), ENsUILayer::Menu);
+    EnsureLayer(ModalLayer, TEXT("Modal"), ENsUILayer::Modal);
 }
