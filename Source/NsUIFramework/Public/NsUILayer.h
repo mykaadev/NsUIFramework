@@ -6,6 +6,7 @@
 #include "Blueprint/UserWidget.h"
 #include "NsUILayer.generated.h"
 
+class UUserWidget;
 class UNsUIWidget;
 
 /**
@@ -22,16 +23,16 @@ public:
     //~ End UUserWidget Interface
 
     /** Push a widget instance on this layer's stack. */
-    bool PushWidget(UNsUIWidget* Widget, UWidget* PreviousFocus);
+    bool PushWidget(UUserWidget* Widget, UWidget* PreviousFocus);
 
     /** Pop the top widget off this layer. */
-    UNsUIWidget* PopWidget();
+    UUserWidget* PopWidget();
 
     /** Pop until only the root widget remains. */
     void PopToRoot();
 
     /** Returns the widget currently on top of the stack. */
-    UNsUIWidget* PeekWidget() const;
+    UUserWidget* PeekWidget() const;
 
     /** Attempts to restore focus to the last saved widget for this layer. */
     UWidget* RestoreLastFocus();
@@ -41,8 +42,8 @@ public:
     TObjectPtr<class UPanelWidget> LayerRoot;
 
 private:
-    UWidget* FindInitialFocus(UNsUIWidget* Widget) const;
+    UWidget* FindInitialFocus(UUserWidget* Widget) const;
 
-    TArray<TWeakObjectPtr<UNsUIWidget>> WidgetStack;
+    TArray<TWeakObjectPtr<UUserWidget>> WidgetStack;
     TArray<TWeakObjectPtr<UWidget>> FocusHistory;
 };

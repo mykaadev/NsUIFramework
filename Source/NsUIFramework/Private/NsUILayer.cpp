@@ -27,7 +27,7 @@ TSharedRef<SWidget> UNsUILayer::RebuildWidget()
     return Super::RebuildWidget();
 }
 
-bool UNsUILayer::PushWidget(UNsUIWidget* Widget, UWidget* PreviousFocus)
+bool UNsUILayer::PushWidget(UUserWidget* Widget, UWidget* PreviousFocus)
 {
     if (!IsValid(Widget) || !IsValid(LayerRoot))
     {
@@ -36,7 +36,7 @@ bool UNsUILayer::PushWidget(UNsUIWidget* Widget, UWidget* PreviousFocus)
 
     if (UPanelWidget* Panel = Cast<UPanelWidget>(LayerRoot))
     {
-        if (UNsUIWidget* Top = PeekWidget())
+        if (UUserWidget* Top = PeekWidget())
         {
             Top->SetVisibility(ESlateVisibility::Collapsed);
         }
@@ -64,14 +64,14 @@ bool UNsUILayer::PushWidget(UNsUIWidget* Widget, UWidget* PreviousFocus)
     return false;
 }
 
-UNsUIWidget* UNsUILayer::PopWidget()
+UUserWidget* UNsUILayer::PopWidget()
 {
     if (!WidgetStack.Num())
     {
         return nullptr;
     }
 
-    UNsUIWidget* Removed = WidgetStack.Pop().Get();
+    UUserWidget* Removed = WidgetStack.Pop().Get();
     if (Removed)
     {
         if (Removed->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
@@ -86,7 +86,7 @@ UNsUIWidget* UNsUILayer::PopWidget()
         LayerRoot->ClearChildren();
     }
 
-    if (UNsUIWidget* NewTop = PeekWidget())
+    if (UUserWidget* NewTop = PeekWidget())
     {
         NewTop->SetVisibility(ESlateVisibility::Visible);
         if (LayerRoot)
@@ -107,7 +107,7 @@ void UNsUILayer::PopToRoot()
     }
 }
 
-UNsUIWidget* UNsUILayer::PeekWidget() const
+UUserWidget* UNsUILayer::PeekWidget() const
 {
     return WidgetStack.IsEmpty() ? nullptr : WidgetStack.Last().Get();
 }
@@ -127,7 +127,7 @@ UWidget* UNsUILayer::RestoreLastFocus()
         }
     }
 
-    if (UNsUIWidget* Top = PeekWidget())
+    if (UUserWidget* Top = PeekWidget())
     {
         if (UWidget* Initial = FindInitialFocus(Top))
         {
@@ -140,7 +140,7 @@ UWidget* UNsUILayer::RestoreLastFocus()
     return nullptr;
 }
 
-UWidget* UNsUILayer::FindInitialFocus(UNsUIWidget* Widget) const
+UWidget* UNsUILayer::FindInitialFocus(UUserWidget* Widget) const
 {
     if (Widget == nullptr)
     {

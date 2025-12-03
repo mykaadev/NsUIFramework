@@ -7,6 +7,7 @@
 #include "Components/PanelWidget.h"
 #include "NsUISubsystem.h"
 #include "NsUIWidget.h"
+#include "Widgets/SWidget.h"
 
 void UNsUILibrary::GatherAllNavigableDescendants(const UUserWidget* InRootWidget, TArray<UWidget*>& InOutNavigables)
 {
@@ -26,9 +27,13 @@ void UNsUILibrary::GatherAllNavigableDescendants(const UUserWidget* InRootWidget
             continue;
         }
 
-        if (Widget->GetIsEnabled() && Widget->IsVisible() && Widget->SupportsKeyboardFocus())
+        if (Widget->GetIsEnabled() && Widget->IsVisible())
         {
-            InOutNavigables.Add(Widget);
+            const TSharedPtr<SWidget> CachedWidget = Widget->GetCachedWidget();
+            if (!CachedWidget.IsValid() || CachedWidget->SupportsKeyboardFocus())
+            {
+                InOutNavigables.Add(Widget);
+            }
         }
 
         if (UPanelWidget* Panel = Cast<UPanelWidget>(Widget))
@@ -56,7 +61,7 @@ UWidget* UNsUILibrary::FindFirstFocusableDescendant(const UUserWidget* InRootWid
     return Navigables.IsValidIndex(0) ? Navigables[0] : nullptr;
 }
 
-UNsUIWidget* UNsUILibrary::PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer)
+UUserWidget* UNsUILibrary::PushWidgetToLayer(TSubclassOf<UUserWidget> WidgetClass, ENsUILayer Layer)
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
@@ -65,7 +70,7 @@ UNsUIWidget* UNsUILibrary::PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClas
     return nullptr;
 }
 
-bool UNsUILibrary::PushWidgetInstanceToLayer(UNsUIWidget* Widget, ENsUILayer Layer)
+bool UNsUILibrary::PushWidgetInstanceToLayer(UUserWidget* Widget, ENsUILayer Layer)
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {

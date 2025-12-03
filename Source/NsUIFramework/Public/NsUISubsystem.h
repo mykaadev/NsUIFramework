@@ -8,6 +8,7 @@
 #include "NsUILibrary.h"
 #include "NsUISubsystem.generated.h"
 
+class UUserWidget;
 class UNsUIWidget;
 class UNsUILayer;
 class UNsUILayout;
@@ -49,11 +50,11 @@ public:
 
     /** Push a widget class onto the specified layer. Returns the created instance. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    UNsUIWidget* PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer);
+    UUserWidget* PushWidget(TSubclassOf<UUserWidget> WidgetClass, ENsUILayer Layer);
 
     /** Push an existing widget instance onto the specified layer. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")
-    bool PushWidgetInstance(UNsUIWidget* Widget, ENsUILayer Layer);
+    bool PushWidgetInstance(UUserWidget* Widget, ENsUILayer Layer);
 
     /** Pop the top widget from the specified layer. */
     UFUNCTION(BlueprintCallable, Category = "NsUI")

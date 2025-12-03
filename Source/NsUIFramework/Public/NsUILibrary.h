@@ -47,11 +47,11 @@ public:
 
     /** Convenience wrapper to push a widget class onto a layer slot. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
-    static UNsUIWidget* PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer);
+    static UUserWidget* PushWidgetToLayer(TSubclassOf<UUserWidget> WidgetClass, ENsUILayer Layer);
 
     /** Convenience wrapper to push an existing widget instance onto a layer slot. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
-    static bool PushWidgetInstanceToLayer(UNsUIWidget* Widget, ENsUILayer Layer);
+    static bool PushWidgetInstanceToLayer(UUserWidget* Widget, ENsUILayer Layer);
 
     /** Pop the top widget off the given layer. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")

@@ -154,7 +154,7 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<UNsUILayout>& InLayou
     }
 }
 
-UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer)
+UUserWidget* UNsUISubsystem::PushWidget(TSubclassOf<UUserWidget> WidgetClass, ENsUILayer Layer)
 {
     if (!WidgetClass)
     {
@@ -165,7 +165,7 @@ UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, EN
     {
         if (APlayerController* PC = LayerPtr->GetOwningPlayer())
         {
-            UNsUIWidget* Widget = CreateWidget<UNsUIWidget>(PC, WidgetClass);
+            UUserWidget* Widget = CreateWidget<UUserWidget>(PC, WidgetClass);
             if (Widget && PushWidgetInstance(Widget, Layer))
             {
                 return Widget;
@@ -176,7 +176,7 @@ UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, EN
     return nullptr;
 }
 
-bool UNsUISubsystem::PushWidgetInstance(UNsUIWidget* Widget, ENsUILayer Layer)
+bool UNsUISubsystem::PushWidgetInstance(UUserWidget* Widget, ENsUILayer Layer)
 {
     if (UNsUILayer* LayerPtr = FindLayer(Layer))
     {
