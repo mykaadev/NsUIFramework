@@ -15,11 +15,23 @@
 #include "NsUILayer.h"
 #include "NsUILayout.h"
 #include "NsUIWidget.h"
+#include "Widgets/SWidget.h"
 #include "Widgets/SObjectWidget.h"
 
 namespace
 {
 constexpr int32 KeyboardUserIndex = 0;
+
+bool IsWidgetFocusable(UWidget* Widget)
+{
+    if (!Widget)
+    {
+        return false;
+    }
+
+    const TSharedPtr<SWidget> CachedWidget = Widget->GetCachedWidget();
+    return CachedWidget.IsValid() && CachedWidget->SupportsKeyboardFocus();
+}
 }
 
 UNsUISubsystem::UNsUISubsystem()
@@ -354,7 +366,7 @@ void UNsUISubsystem::HandleHoverFocus(UWidget* Widget)
         return;
     }
 
-    if (!Widget->IsFocusable())
+    if (!IsWidgetFocusable(Widget))
     {
         return;
     }
@@ -366,7 +378,7 @@ void UNsUISubsystem::HandleHoverFocus(UWidget* Widget)
 
 void UNsUISubsystem::UpdateFocus(UWidget* Widget, EFocusCause FocusCause)
 {
-    if (!Widget || !Widget->IsFocusable())
+    if (!Widget || !IsWidgetFocusable(Widget))
     {
         return;
     }
@@ -412,7 +424,7 @@ UWidget* UNsUISubsystem::FindFirstFocusable(UWidget* Root) const
         return nullptr;
     }
 
-    if (Root->IsFocusable() && Root->IsVisible())
+    if (IsWidgetFocusable(Root) && Root->IsVisible())
     {
         return Root;
     }
@@ -425,7 +437,7 @@ UWidget* UNsUISubsystem::FindFirstFocusable(UWidget* Root) const
             Tree->GetAllWidgets(Widgets);
             for (UWidget* Widget : Widgets)
             {
-                if (Widget && Widget->IsFocusable() && Widget->IsVisible())
+                if (Widget && IsWidgetFocusable(Widget) && Widget->IsVisible())
                 {
                     return Widget;
                 }
@@ -641,7 +653,7 @@ UWidget* UNsUISubsystem::FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origi
 
     for (UWidget* Candidate : Widgets)
     {
-        if (!Candidate || Candidate == Origin || !Candidate->IsFocusable() || !Candidate->IsVisible())
+        if (!Candidate || Candidate == Origin || !IsWidgetFocusable(Candidate) || !Candidate->IsVisible())
         {
             continue;
         }
