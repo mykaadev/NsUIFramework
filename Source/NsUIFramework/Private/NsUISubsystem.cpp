@@ -154,19 +154,19 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<UNsUILayout>& InLayou
     }
 }
 
-UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer LayerName)
+UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer)
 {
     if (!WidgetClass)
     {
         return nullptr;
     }
 
-    if (UNsUILayer* Layer = FindLayer(LayerName))
+    if (UNsUILayer* LayerPtr = FindLayer(Layer))
     {
-        if (APlayerController* PC = Layer->GetOwningPlayer())
+        if (APlayerController* PC = LayerPtr->GetOwningPlayer())
         {
             UNsUIWidget* Widget = CreateWidget<UNsUIWidget>(PC, WidgetClass);
-            if (Widget && PushWidgetInstance(Widget, LayerName))
+            if (Widget && PushWidgetInstance(Widget, Layer))
             {
                 return Widget;
             }
@@ -176,30 +176,30 @@ UNsUIWidget* UNsUISubsystem::PushWidget(TSubclassOf<UNsUIWidget> WidgetClass, EN
     return nullptr;
 }
 
-bool UNsUISubsystem::PushWidgetInstance(UNsUIWidget* Widget, ENsUILayer LayerName)
+bool UNsUISubsystem::PushWidgetInstance(UNsUIWidget* Widget, ENsUILayer Layer)
 {
-    if (UNsUILayer* Layer = FindLayer(LayerName))
+    if (UNsUILayer* LayerPtr = FindLayer(Layer))
     {
-        Layer->PushWidget(Widget, CurrentFocusedWidget.Get());
+        LayerPtr->PushWidget(Widget, CurrentFocusedWidget.Get());
         return true;
     }
     return false;
 }
 
-void UNsUISubsystem::PopWidget(ENsUILayer LayerName)
+void UNsUISubsystem::PopWidget(ENsUILayer Layer)
 {
-    if (UNsUILayer* Layer = FindLayer(LayerName))
+    if (UNsUILayer* LayerPtr = FindLayer(Layer))
     {
-        Layer->PopWidget();
+        LayerPtr->PopWidget();
     }
 }
 
-void UNsUISubsystem::PopToRoot(ENsUILayer LayerName)
+void UNsUISubsystem::PopToRoot(ENsUILayer Layer)
 {
-    if (UNsUILayer* Layer = FindLayer(LayerName))
+    if (UNsUILayer* LayerPtr = FindLayer(Layer))
     {
-        Layer->PopToRoot();
-        Layer->RestoreLastFocus();
+        LayerPtr->PopToRoot();
+        LayerPtr->RestoreLastFocus();
     }
 }
 
@@ -366,9 +366,9 @@ void UNsUISubsystem::NotifyWidgetFocusLost(UWidget* Widget)
     }
 }
 
-UNsUILayer* UNsUISubsystem::FindLayer(ENsUILayer LayerName) const
+UNsUILayer* UNsUISubsystem::FindLayer(ENsUILayer Layer) const
 {
-    return ActiveUILayout ? ActiveUILayout->GetLayer(LayerName) : nullptr;
+    return ActiveUILayout ? ActiveUILayout->GetLayer(Layer) : nullptr;
 }
 
 UNsUILayer* UNsUISubsystem::FindLayerForWidget(const UWidget* Widget) const

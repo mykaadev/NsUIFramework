@@ -56,25 +56,6 @@ UWidget* UNsUILibrary::FindFirstFocusableDescendant(const UUserWidget* InRootWid
     return Navigables.IsValidIndex(0) ? Navigables[0] : nullptr;
 }
 
-namespace
-{
-static const FName MenuLayerName(TEXT("Menu"));
-static const FName ModalLayerName(TEXT("Modal"));
-}
-
-FName UNsUILibrary::GetLayerName(ENsUILayer Layer)
-{
-    switch (Layer)
-    {
-    case ENsUILayer::Menu:
-        return MenuLayerName;
-    case ENsUILayer::Modal:
-        return ModalLayerName;
-    default:
-        return NAME_None;
-    }
-}
-
 UNsUIWidget* UNsUILibrary::PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer)
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())

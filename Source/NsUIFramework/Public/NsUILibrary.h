@@ -45,15 +45,11 @@ public:
     /** Find the first focusable descendant of a widget. */
     static UWidget* FindFirstFocusableDescendant(const UUserWidget* InRootWidget);
 
-    /** Translate an enum layer into the FName used by the framework. */
-    UFUNCTION(BlueprintPure, Category = "NsUI|Layers")
-    static FName GetLayerName(ENsUILayer Layer);
-
-    /** Convenience wrapper to push a widget class onto a named layer. */
+    /** Convenience wrapper to push a widget class onto a layer slot. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
     static UNsUIWidget* PushWidgetToLayer(TSubclassOf<UNsUIWidget> WidgetClass, ENsUILayer Layer);
 
-    /** Convenience wrapper to push an existing widget instance onto a named layer. */
+    /** Convenience wrapper to push an existing widget instance onto a layer slot. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Layers")
     static bool PushWidgetInstanceToLayer(UNsUIWidget* Widget, ENsUILayer Layer);
 
