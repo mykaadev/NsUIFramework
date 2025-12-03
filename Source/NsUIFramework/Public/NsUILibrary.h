@@ -3,6 +3,8 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "NsUIFrameworkTypes.h"
 #include "UObject/SoftObjectPtr.h"
+
+#include "Blueprint/UserWidget.h"
 #include "NsUILibrary.generated.h"
 
 UCLASS()

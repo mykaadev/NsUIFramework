@@ -2,6 +2,7 @@
 
 #include "NsUIFrameworkTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
+#include "Templates/SharedPointer.h"
 #include "UObject/SoftObjectPtr.h"
 #include "NsUISubsystem.generated.h"
 
@@ -9,6 +10,9 @@ class UNsUILayout;
 class UNsUILayer;
 class UNsUICursor;
 class UNsUIWidget;
+class UUserWidget;
+class UWidget;
+class SWidget;
 
 UCLASS()
 class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem
@@ -70,7 +74,7 @@ private:
 
     void SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
     TWeakPtr<SWidget> GetSlateFocus() const;
-    void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const FWidgetPath& InNewPath);
+    void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
 
     FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
     ENsUILayer GetTopActiveLayer() const;

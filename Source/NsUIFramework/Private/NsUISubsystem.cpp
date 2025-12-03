@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 
+#include "Blueprint/SlateBlueprintLibrary.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -12,9 +15,7 @@
 #include "NsUILayer.h"
 #include "NsUILayout.h"
 #include "NsUIWidget.h"
-#include "Widgets/SWidget.h"
-#include "Blueprint/SlateBlueprintLibrary.h"
-#include "Blueprint/WidgetTree.h"
+#include "Widgets/SObjectWidget.h"
 
 namespace
 {
@@ -88,7 +89,11 @@ void UNsUISubsystem::EnsureLayout()
         return;
     }
 
-    TSubclassOf<UNsUILayout> LayoutClass = DefaultLayoutClass ? DefaultLayoutClass : UNsUILayout::StaticClass();
+    TSubclassOf<UNsUILayout> LayoutClass = DefaultLayoutClass;
+    if (!LayoutClass)
+    {
+        LayoutClass = UNsUILayout::StaticClass();
+    }
     ActiveLayout = CreateWidget<UNsUILayout>(LocalPlayer, LayoutClass);
 
     if (!ActiveLayout)
@@ -145,7 +150,7 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenCl
     }
 
     FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
-    if (CurrentFocus.IsValid() && CurrentFocus->IsDescendantOf(LayerWidget))
+    if (CurrentFocus.IsValid() && CurrentFocus->IsChildOf(LayerWidget))
     {
         State.FocusHistory.Add(CurrentFocus);
     }
@@ -243,7 +248,7 @@ void UNsUISubsystem::PopAllWidgetsFromLayer(ENsUILayer Layer)
     State->Stack.Reset();
     State->FocusHistory.Reset();
 
-    if (CurrentFocus.IsValid() && State->LayerWidget.IsValid() && CurrentFocus->IsDescendantOf(State->LayerWidget.Get()))
+    if (CurrentFocus.IsValid() && State->LayerWidget.IsValid() && CurrentFocus->IsChildOf(State->LayerWidget.Get()))
     {
         CurrentFocus.Reset();
         UpdateCursorToFocusedWidget();
@@ -349,7 +354,7 @@ void UNsUISubsystem::HandleHoverFocus(UWidget* Widget)
         return;
     }
 
-    if (!Widget->SupportsKeyboardFocus())
+    if (!Widget->IsFocusable())
     {
         return;
     }
@@ -361,7 +366,7 @@ void UNsUISubsystem::HandleHoverFocus(UWidget* Widget)
 
 void UNsUISubsystem::UpdateFocus(UWidget* Widget, EFocusCause FocusCause)
 {
-    if (!Widget || !Widget->SupportsKeyboardFocus())
+    if (!Widget || !Widget->IsFocusable())
     {
         return;
     }
@@ -407,7 +412,7 @@ UWidget* UNsUISubsystem::FindFirstFocusable(UWidget* Root) const
         return nullptr;
     }
 
-    if (Root->SupportsKeyboardFocus() && Root->IsVisible())
+    if (Root->IsFocusable() && Root->IsVisible())
     {
         return Root;
     }
@@ -420,7 +425,7 @@ UWidget* UNsUISubsystem::FindFirstFocusable(UWidget* Root) const
             Tree->GetAllWidgets(Widgets);
             for (UWidget* Widget : Widgets)
             {
-                if (Widget && Widget->SupportsKeyboardFocus() && Widget->IsVisible())
+                if (Widget && Widget->IsFocusable() && Widget->IsVisible())
                 {
                     return Widget;
                 }
@@ -490,18 +495,27 @@ TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
         return TWeakPtr<SWidget>();
     }
 
-    return FSlateApplication::Get().GetUserFocus(KeyboardUserIndex);
+    return FSlateApplication::Get().GetUserFocusedWidget(KeyboardUserIndex);
 }
 
-void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const FWidgetPath& InNewPath)
+void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)
 {
-    for (int32 Index = InNewPath.Widgets.Num() - 1; Index >= 0; --Index)
+    TSharedPtr<SWidget> FocusedSlateWidget = InNewWidget;
+
+    if (!FocusedSlateWidget.IsValid() && InNewPath.Widgets.Num() > 0)
     {
-        if (UWidget* Widget = InNewPath.Widgets[Index].Widget->GetWidgetObject())
+        FocusedSlateWidget = InNewPath.Widgets.Last().Widget;
+    }
+
+    if (FocusedSlateWidget.IsValid())
+    {
+        if (TSharedPtr<SObjectWidget> ObjectWidget = StaticCastSharedPtr<SObjectWidget>(FocusedSlateWidget))
         {
-            CurrentFocus = Widget;
-            UpdateCursorToFocusedWidget();
-            break;
+            if (UWidget* Widget = ObjectWidget->GetWidgetObject())
+            {
+                CurrentFocus = Widget;
+                UpdateCursorToFocusedWidget();
+            }
         }
     }
 }
@@ -560,7 +574,7 @@ void UNsUISubsystem::MoveFocusWithFallback(EUINavigation Direction)
     {
         for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
         {
-            if (Pair.Value.LayerWidget.IsValid() && CurrentFocus->IsDescendantOf(Pair.Value.LayerWidget.Get()))
+            if (Pair.Value.LayerWidget.IsValid() && CurrentFocus->IsChildOf(Pair.Value.LayerWidget.Get()))
             {
                 ActiveLayer = Pair.Key;
                 break;
@@ -627,7 +641,7 @@ UWidget* UNsUISubsystem::FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origi
 
     for (UWidget* Candidate : Widgets)
     {
-        if (!Candidate || Candidate == Origin || !Candidate->SupportsKeyboardFocus() || !Candidate->IsVisible())
+        if (!Candidate || Candidate == Origin || !Candidate->IsFocusable() || !Candidate->IsVisible())
         {
             continue;
         }
@@ -697,7 +711,7 @@ void UNsUISubsystem::RefreshDebugOverlay()
         {
             if (UUserWidget* Widget = Stack[Index].Get())
             {
-                if (CurrentFocus.IsValid() && CurrentFocus->IsDescendantOf(Widget))
+                if (CurrentFocus.IsValid() && CurrentFocus->IsChildOf(Widget))
                 {
                     Snapshot.FocusedIndex = Index;
                     break;
