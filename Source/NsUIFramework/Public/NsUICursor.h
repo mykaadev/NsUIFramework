@@ -1,47 +1,28 @@
-// Copyright (C) 2025 nulled.softworks. All rights reserved.
-
 #pragma once
 
-#include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "Components/Widget.h"
+#include "Styling/SlateBrush.h"
 #include "NsUICursor.generated.h"
 
-/**
- * Simple widget used to visually indicate which widget currently has keyboard focus.
- */
+class SImage;
+
 UCLASS()
-class NSUIFRAMEWORK_API UNsUICursor : public UUserWidget
+class NSUIFRAMEWORK_API UNsUICursor : public UWidget
 {
     GENERATED_BODY()
 
-// Functions
 public:
-
-    /** Constructor */
     UNsUICursor(const FObjectInitializer& ObjectInitializer);
 
-    /** Move the cursor so that it overlays the target widget. */
-    UFUNCTION(BlueprintCallable, Category="Cursor")
-    void MoveToWidget(class UWidget* const InTarget);
+    virtual TSharedRef<SWidget> RebuildWidget() override;
+    virtual void SynchronizeProperties() override;
 
-    /** Move the cursor to a viewport-relative screen-space position. */
-    UFUNCTION(BlueprintCallable, Category="Cursor")
-    void MoveToScreenPosition(const FVector2D& InViewportPos);
+    /** Brush used to draw the cursor. A default arrow is applied in the constructor. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
+    FSlateBrush CursorBrush;
 
-// Variables
-public:
+    void SetCursorBrush(const FSlateBrush& InBrush);
 
-    /** Target point on the focused widget (0-1 normalized). (0,0)=top-left. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cursor")
-    FVector2D TargetAnchor;
-
-    /** Local alignment of the cursor itself when positioned on screen. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cursor")
-    FVector2D CursorAlignment;
-
-    /** Cursor Horizontal Padding. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cursor")
-    float HorizontalPadding;
-
+private:
+    TSharedPtr<SImage> MyImage;
 };
-

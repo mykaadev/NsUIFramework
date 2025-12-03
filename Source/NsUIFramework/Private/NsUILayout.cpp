@@ -1,170 +1,85 @@
-// Copyright (C) 2025 nulled.softworks. All rights reserved.
-
 #include "NsUILayout.h"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "NsUICursor.h"
 #include "NsUILayer.h"
-#include "NsUILibrary.h"
+#include "Styling/AppStyle.h"
+
+UNsUILayout::UNsUILayout(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer)
+{
+    LayerClass = UNsUILayer::StaticClass();
+
+    if (FAppStyle::IsInitialized())
+    {
+        CursorBrush = *FAppStyle::Get().GetBrush("Icons.ChevronRight");
+    }
+}
 
 void UNsUILayout::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
 
-    if (WidgetTree == nullptr)
+    if (!WidgetTree)
     {
-        WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
+        return;
     }
 
-    // Ensure we have a root overlay
-    UOverlay* RootOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
-    if (RootOverlay == nullptr && WidgetTree != nullptr)
+    RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
+    WidgetTree->RootWidget = RootOverlay;
+
+    BuildLayer(ENsUILayer::Game, 0);
+    BuildLayer(ENsUILayer::Menu, 1);
+    BuildLayer(ENsUILayer::Modal, 2);
+
+    CursorWidget = WidgetTree->ConstructWidget<UNsUICursor>(UNsUICursor::StaticClass());
+    if (CursorWidget)
     {
-        if (WidgetTree->RootWidget == nullptr)
-        {
-            RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
-            WidgetTree->RootWidget = RootOverlay;
-        }
-        else
-        {
-            UWidget* const ExistingRoot = WidgetTree->RootWidget;
-
-            RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
-            WidgetTree->RootWidget = RootOverlay;
-
-            if (UOverlaySlot* const ExistingSlot = RootOverlay->AddChildToOverlay(ExistingRoot))
-            {
-                ExistingSlot->SetHorizontalAlignment(HAlign_Fill);
-                ExistingSlot->SetVerticalAlignment(VAlign_Fill);
-            }
-        }
-    }
-
-    // Helper: create missing layers, but keep any that BP already provided
-    auto EnsureLayer = [&](TObjectPtr<UNsUILayer>& LayerPtr, const FName Name) -> void
-    {
-        if (LayerPtr == nullptr && RootOverlay != nullptr && WidgetTree != nullptr)
-        {
-            if (UNsUILayer* const NewLayer = WidgetTree->ConstructWidget<UNsUILayer>(UNsUILayer::StaticClass(), Name))
-            {
-                if (UOverlaySlot* const Slot = RootOverlay->AddChildToOverlay(NewLayer))
-                {
-                    Slot->SetHorizontalAlignment(HAlign_Fill);
-                    Slot->SetVerticalAlignment(VAlign_Fill);
-                }
-
-                LayerPtr = NewLayer;
-            }
-        }
-    };
-
-    EnsureLayer(GameStaticLayer,        TEXT("GameStaticLayer"));
-    EnsureLayer(GameMenuLayer,          TEXT("GameMenuLayer"));
-    EnsureLayer(GameModalLayer,         TEXT("GameModalLayer"));
-    EnsureLayer(ApplicationStaticLayer, TEXT("ApplicationStaticLayer"));
-    EnsureLayer(ApplicationMenuLayer,   TEXT("ApplicationMenuLayer"));
-    EnsureLayer(ApplicationModalLayer,  TEXT("ApplicationModalLayer"));
-
-    // Now register whatever layers we have (BP-provided or auto-created)
-    RegisterLayer(ENsUILayerType::GameStatic,        GameStaticLayer);
-    RegisterLayer(ENsUILayerType::GameMenu,          GameMenuLayer);
-    RegisterLayer(ENsUILayerType::GameModal,         GameModalLayer);
-    RegisterLayer(ENsUILayerType::ApplicationStatic, ApplicationStaticLayer);
-    RegisterLayer(ENsUILayerType::ApplicationMenu,   ApplicationMenuLayer);
-    RegisterLayer(ENsUILayerType::ApplicationModal,  ApplicationModalLayer);
-}
-
-void UNsUILayout::RegisterLayer(const ENsUILayerType InLayerType, class UNsUILayer* const InLayer)
-{
-    if (InLayer != nullptr && !RegisteredLayers.Contains(InLayerType))
-    {
-        RegisteredLayers.Emplace(InLayerType, InLayer);
+        CursorWidget->SetCursorBrush(CursorBrush);
+        RootOverlay->AddChildToOverlay(CursorWidget)->SetZOrder(3);
     }
 }
 
-bool UNsUILayout::UnregisterLayer(const ENsUILayerType InLayerType)
+UNsUILayer* UNsUILayout::GetLayerWidget(ENsUILayer Layer) const
 {
-    if ( UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (const TObjectPtr<UNsUILayer>* Found = Layers.Find(Layer))
     {
-        FoundLayer->RemoveFromParent();
-    }
-
-    return RegisteredLayers.Remove(InLayerType) > 0;
-}
-
-UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass)
-{
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
-    {
-        if (UNsUIWidgetStackElement* Content = FoundLayer->Push(InWidgetClass))
-        {
-            ForceLayoutPrepass();
-            // The new content that was just pushed
-            Content->WidgetScopeLayerType = InLayerType; // fill the layer where he belongs to
-            return Content;
-        }
-    }
-
-    
-    return nullptr;
-}
-
-UNsUIWidgetStackElement* UNsUILayout::PopContentFromLayer(const ENsUILayerType InLayerType)
-{
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
-    {
-        // if the layer stack is not empty, we can just keep swapping from widget to widget within that stack
-        // if the layer stack is empty, we use the invoker info, now we have to return the focus to the original widget that pushed this one
-        
-        UNsUIWidgetStackElement* TopElementOrInvokerInfo = FoundLayer->Pop();
-        ForceLayoutPrepass();
-        return FindInvokerWidgetInLayout(TopElementOrInvokerInfo);
+        return Found->Get();
     }
 
     return nullptr;
 }
 
-void UNsUILayout::ClearAllLayers() const
+void UNsUILayout::UpdateCursorPosition(const FVector2D& ScreenPosition)
 {
-    TArray<UNsUILayer*> InOutLayers; RegisteredLayers.GenerateValueArray(InOutLayers);
-    for (UNsUILayer* const Layer : InOutLayers)
+    if (CursorWidget)
     {
-        if (Layer != nullptr)
-        {
-            Layer->ClearStack();
-        }
+        CursorWidget->SetRenderTranslation(ScreenPosition);
     }
 }
 
-void UNsUILayout::ClearLayer(const ENsUILayerType InLayerType)
+void UNsUILayout::SetCursorVisibility(bool bVisible)
 {
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (CursorWidget)
     {
-        FoundLayer->ClearStack();
+        CursorWidget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
     }
 }
 
-UNsUIWidgetStackElement* UNsUILayout::FindInvokerWidgetInLayout(const UNsUIWidgetStackElement* InWidget)
+void UNsUILayout::BuildLayer(ENsUILayer Layer, int32 ZOrder)
 {
-    if (InWidget != nullptr)
+    if (!LayerClass)
     {
-        // if this widget was pushed from other widget within or the same layer or not
-        if (InWidget->InvokerWidgetScope != nullptr && InWidget->InvokerElement != nullptr)
-        {
-            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->InvokerLayerType))
-            {
-                return FoundLayer->FindStackElement(InWidget->InvokerWidgetScope, InWidget->InvokerElement);
-            }     
-        } // if the widget does not have an invoker (could be the first widget summoned to the layer) we retrieve it again
-        else if (InWidget->WidgetScope != nullptr && InWidget->WidgetScopeFocusedElement != nullptr)
-        {
-            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->WidgetScopeLayerType))
-            {
-                return FoundLayer->FindStackElement(InWidget->WidgetScope, InWidget->WidgetScopeFocusedElement);
-            }     
-        }
-       
+        return;
     }
 
-    return nullptr;
+    UNsUILayer* LayerWidget = WidgetTree->ConstructWidget<UNsUILayer>(LayerClass);
+    if (LayerWidget && RootOverlay)
+    {
+        LayerWidget->SetLayerType(Layer);
+        Layers.Add(Layer, LayerWidget);
+        RootOverlay->AddChildToOverlay(LayerWidget)->SetZOrder(ZOrder);
+    }
 }

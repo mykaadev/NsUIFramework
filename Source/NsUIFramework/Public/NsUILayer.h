@@ -1,83 +1,34 @@
-// Copyright (C) 2025 nulled.softworks. All rights reserved.
-
 #pragma once
 
-#include "CoreMinimal.h"
-#include "NsUILibrary.h"
+#include "NsUIFrameworkTypes.h"
 #include "Blueprint/UserWidget.h"
 #include "NsUILayer.generated.h"
 
-/**
- * Nulled Softworks UI Layer
- */
+class UPanelWidget;
+
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayer : public UUserWidget
 {
     GENERATED_BODY()
 
-// Functions
 public:
+    UNsUILayer(const FObjectInitializer& ObjectInitializer);
 
-    //~ Begin UUserWidget Interface
-    virtual TSharedRef<class SWidget> RebuildWidget() override;
-    //~ End UUserWidget Interface
+    virtual TSharedRef<SWidget> RebuildWidget() override;
 
-    /** Push content */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* Push(const TSoftClassPtr<class UUserWidget>& InClass);
+    void AddScreen(UUserWidget* Screen);
+    void RemoveScreen(UUserWidget* Screen);
+    void ClearScreens();
 
-    /** Pop content */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* Pop();
+    void SetLayerType(ENsUILayer InLayer);
+    ENsUILayer GetLayerType() const { return Layer; }
 
-    /** Get Stack */
-    UFUNCTION(BlueprintCallable)
-    TArray<class UNsUIWidgetStackElement*> GetStack() const;
-
-    /** Clear stack */
-    UFUNCTION(BlueprintCallable)
-    void ClearStack();
-
-    /** Peek */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* Peek();
-
-    /** Collapse top widget */
-    UFUNCTION(BlueprintCallable)
-    void CollapseTop();
-
-    /** Show top widget*/
-    UFUNCTION(BlueprintCallable)
-    void ShowTop();
-
-    /** Find Stack Element */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* FindStackElement(const UUserWidget* InInvokerScope, const UWidget* InInvokerElement);
-
-    /** Get stack list names */
-    UFUNCTION(BlueprintCallable)
-    FText GetStackListNames();
-
-    /** Gets the initial focus for a widget */
-    UFUNCTION(BlueprintCallable)
-    class UWidget* GetInitialFocusForWidget(class UUserWidget* InWidget);
+    UPanelWidget* GetRootPanel() const { return RootPanel; }
 
 private:
+    UPROPERTY()
+    TObjectPtr<UPanelWidget> RootPanel;
 
-    /** Handles the push functionality of the widget when it implements our interface */
-    UFUNCTION()
-    void PushWidget(class UUserWidget* InWidget);
-
-// Variables
-public:
-
-    /** Border that contains our widget */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NsUI")
-    TObjectPtr<class UBorder> LayerRoot;
-
-protected:
-
-    /** Widget Stack */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-    TArray<class UNsUIWidgetStackElement*> Stack;
+    UPROPERTY(EditAnywhere, Category = "NsUI")
+    ENsUILayer Layer;
 };

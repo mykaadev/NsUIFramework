@@ -1,83 +1,45 @@
-// Copyright (C) 2025 nulled.softworks. All rights reserved.
-
 #pragma once
 
-#include "CoreMinimal.h"
+#include "NsUIFrameworkTypes.h"
 #include "Blueprint/UserWidget.h"
-#include "NsUILayer.h"
-#include "NsUILibrary.h"
 #include "NsUILayout.generated.h"
 
-/**
- * Nulled Softworks UI Layout
- */
+class UOverlay;
+class UNsUILayer;
+class UNsUICursor;
+
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
 {
     GENERATED_BODY()
 
-// Functions
 public:
+    UNsUILayout(const FObjectInitializer& ObjectInitializer);
 
-    //~ Begin UUserWidget Interface
     virtual void NativeOnInitialized() override;
-    //~ End UUserWidget Interface
 
-    /** Register Layer */
-    UFUNCTION(BlueprintCallable)
-    void RegisterLayer(const ENsUILayerType InLayerType, class UNsUILayer* const InLayer);
+    UNsUILayer* GetLayerWidget(ENsUILayer Layer) const;
+    UNsUICursor* GetCursorWidget() const { return CursorWidget; }
 
-    /** Unregister Layer */
-    UFUNCTION(BlueprintCallable)
-    bool UnregisterLayer(const ENsUILayerType InLayerType);
+    void UpdateCursorPosition(const FVector2D& ScreenPosition);
+    void SetCursorVisibility(bool bVisible);
 
-    /** Push content to layer */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
+protected:
+    UPROPERTY(EditDefaultsOnly, Category = "NsUI")
+    TSubclassOf<UNsUILayer> LayerClass;
 
-    /** Pop content form layer */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* PopContentFromLayer(ENsUILayerType InLayerType);
+    UPROPERTY(EditDefaultsOnly, Category = "NsUI")
+    FSlateBrush CursorBrush;
 
-    /** Clear all layers */
-    UFUNCTION(BlueprintCallable)
-    void ClearAllLayers() const;
+private:
+    UPROPERTY()
+    TObjectPtr<UOverlay> RootOverlay;
 
-    /** Clear layer */
-    UFUNCTION(BlueprintCallable)
-    void ClearLayer(const ENsUILayerType InLayerType);
+    UPROPERTY()
+    TMap<ENsUILayer, TObjectPtr<UNsUILayer>> Layers;
 
-    /** Find Invoker widget in this layout */
-    class UNsUIWidgetStackElement* FindInvokerWidgetInLayout(const class UNsUIWidgetStackElement* InWidget);
+    UPROPERTY()
+    TObjectPtr<UNsUICursor> CursorWidget;
 
-    // Variables
-public:
-
-    /** Any static elements present in the game (eg: prompts, time, navigation) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameStaticLayer;
-
-    /** Any pop-up elements present in the game (eg: inventory, shops) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameMenuLayer;
-
-    /** Any pop-up elements present in the game (eg: confirmations) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameModalLayer;
-
-    /** Any static elements present in the application (eg: version, prompts) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationStaticLayer;
-
-    /** Any static elements present in the application (eg: menus, consoles, debug) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationMenuLayer;
-
-    /** Any pop-up elements present in the application (eg: confirmations) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationModalLayer;
-
-    /** Registered Layers */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-    TMap<ENsUILayerType, UNsUILayer*> RegisteredLayers;
+    void BuildLayer(ENsUILayer Layer, int32 ZOrder);
 };

@@ -1,165 +1,83 @@
-// Copyright (C) 2025 nulled.softworks. All rights reserved.
-
 #pragma once
 
-#include "CoreMinimal.h"
-#include "Subsystems/GameInstanceSubsystem.h"
-#include "NsUILibrary.h"
-#include "Tickable.h"
+#include "NsUIFrameworkTypes.h"
+#include "Subsystems/LocalPlayerSubsystem.h"
 #include "NsUISubsystem.generated.h"
 
-/**
- * Nulled Softworks UI Subsystem
- */
+class UNsUILayout;
+class UNsUILayer;
+class UNsUICursor;
+class UNsUIWidget;
+
 UCLASS()
-class NSUIFRAMEWORK_API UNsUISubsystem : public UGameInstanceSubsystem, public FTickableGameObject
+class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem
 {
     GENERATED_BODY()
 
-// Functions
 public:
-
-    /** Constructor */
     UNsUISubsystem();
 
-    //~ Begin FTickableGameObject Interface
-    virtual void Tick(float DeltaTime) override;
-    virtual TStatId GetStatId() const override;
-    virtual bool IsTickable() const override { return bActorSelectionActive; }
-    //~ End FTickableGameObject Interface
-
-    //~ Begin USubsystem Interface
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
-    //~ End USubsystem Interface
 
-    /** Get UI Subsystem */
-    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
-    static UNsUISubsystem* GetSubsystem();
+    UUserWidget* PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer);
+    void PopWidgetFromLayer(ENsUILayer Layer);
+    void PopAllWidgetsFromLayer(ENsUILayer Layer);
 
-    /** Set Active UI Layout */
-    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
-    void SetActiveUILayout(const TSoftClassPtr<class UNsUILayout>& InLayout);
+    void Navigate(EUINavigation Direction);
+    void Confirm();
+    void Cancel();
 
-    /** Get Active UI Layout */
-    UFUNCTION(BlueprintCallable, Category = "NS UI Subsystem")
-    UNsUILayout* GetActiveUILayout() const;
+    void ToggleDebugOverlay();
 
-    /** Push widget to layer */
-    UFUNCTION()
-    class UUserWidget* PushWidgetToLayer(const TSoftClassPtr<class UUserWidget>& InWidget, const ENsUILayerType InLayerType);
+    UWidget* GetCurrentFocusedWidget() const { return CurrentFocus.Get(); }
+    void HandleHoverFocus(UWidget* Widget);
 
-    /** Pop widget to layer */
-    UFUNCTION()
-    void PopWidgetFromLayer(const ENsUILayerType InLayerType);
-
-    /**
-     * Called when the player presses the navigation input (eg: WASD)
-     * @param Direction  A 2D vector: (-1,0)=Left, (1,0)=Right, (0,-1)=Up, (0,1)=Down
-     */
-    void HandleNavigate(const FVector2D& Direction);
-
-    /** Called when the player presses the Confirm input */
-    bool HandleConfirm();
-
-    /** Called when the player presses the Cancel input */
-    bool HandleCancel();
-
-    /** Called when the player presses a toggle selection input */
-    void HandleToggle();
-
-    /** Enable world-actor selection mode */
-    void EnterActorSelectionMode();
-
-    /** Disable world-actor selection mode */
-    void ExitActorSelectionMode();
-
-    /** Register a world actor as a selectable focus target */
-    int32 RegisterActorFocus(AActor* Actor, const FBox2D& ScreenBounds);
-
-    /** Remove a previously registered actor */
-    void UnregisterActorFocus(AActor* Actor);
-
-    /** Remove all registered actors */
-    void ClearActorFocusTargets();
-
-    /**
-    * If a widget’s explicit neighbor (e.g. GetUpNeighbor()) is null, we fall back
-    * to this: scan all other widgets in the same layer (via the UI Subsystem) and
-    * pick the “best” candidate by geometry.
-    *
-    * @param InCurrentWidget  The widget that currently has focus.
-    * @param InNavDir         Which direction we’re moving (Up/Down/Left/Right).
-    * @return A UWidget* pointing at the best neighbor in that direction, or nullptr if none.
-    */
-    class UWidget* FindBestNeighborBySpatialSearch(class UWidget* const InCurrentWidget, const EUINavigation InNavDir) const;
-
-    /** Get Widget geometry center */
-    FVector2D GetWidgetCenterInViewport(const class UWidget* const InWidget) const;
-
-    /** Explicitly set which widget is currently “focused” in the UI, called by the layer when it pushes or pops a widget */
-    void SetCurrentFocusedWidget(class UWidget* const InNewFocus);
-
-    /** Get the current focused widget */
-    class UWidget* GetCurrentFocusedWidget() const;
-
-    /** Helper: if CurrentFocusedWidget implements INsUINavigable, return a pointer to that interface */
-    class INsUINavigation* GetCurrentNavInterface() const;
-
-    /** Called once at subsystem init to fill the maps */
-    void InitializeCommandRegistry();
-
-    /** Move the cursor to the currently focused actor */
-    void UpdateActorCursor();
-
-    /** Get current layer stack scope */
-    class UNsUIWidgetStackElement* GetCurrentScope();
-
-// Events
-public:
-
-    /** Event fired when an actor is confirmed */
-    FNsUIActorDelegate OnActorConfirmed;
-
-    /** Event fired when an actor is cancelled */
-    FNsUIActorDelegate OnActorCancelled;
-
-    /** Event fired when an actor is toggled */
-    FNsUIActorDelegate OnActorToggled;
-
-// Variables
 private:
+    struct FNsUILayerState
+    {
+        TWeakObjectPtr<UNsUILayer> LayerWidget;
+        TArray<TWeakObjectPtr<UUserWidget>> Stack;
+        TArray<TWeakObjectPtr<UWidget>> FocusHistory;
+    };
 
-    /** Instance of the cursor widget */
     UPROPERTY()
-    TObjectPtr<class UNsUICursor> CursorWidget;
+    TObjectPtr<UNsUILayout> ActiveLayout;
 
-    /** Active UI layout */
-    UPROPERTY(VisibleDefaultsOnly)
-    TObjectPtr<class UNsUILayout> ActiveUILayout;
+    UPROPERTY(EditDefaultsOnly, Category = "NsUI")
+    TSubclassOf<UNsUILayout> DefaultLayoutClass;
 
-    /** Current layer stack scope */
-    UPROPERTY(VisibleAnywhere)
-    TObjectPtr<class UNsUIWidgetStackElement> CurrentScope;
+#if WITH_EDITOR
+    UPROPERTY()
+    TObjectPtr<class UNsUIDebugOverlay> DebugOverlay;
+#endif
 
-    /** Map from widget class to what to do when HandleConfirm() is pressed */
-    TMap<UClass*, FWidgetCommand> ConfirmRegistry;
+    TMap<ENsUILayer, FNsUILayerState> LayerStates;
+    ENsUIInputSource LastInputSource;
+    TWeakObjectPtr<UWidget> CurrentFocus;
+    FDelegateHandle FocusChangedHandle;
 
-    /** Map from widget class to what to do when HandleCancel() is pressed */
-    TMap<UClass*, FWidgetCommand> CancelRegistry;
+    void EnsureLayout();
+    UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);
+    void UpdateFocus(UWidget* Widget, EFocusCause FocusCause);
+    UWidget* ResolveInitialFocus(UUserWidget* Screen) const;
+    UWidget* FindFirstFocusable(UWidget* Root) const;
+    void RestoreFocusForLayer(ENsUILayer Layer);
 
-    /** List of registered world-actor focus targets */
-    TArray<FNsUIActorFocusInfo> ActorFocusTargets;
+    void SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
+    TWeakPtr<SWidget> GetSlateFocus() const;
+    void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const FWidgetPath& InNewPath);
 
-    /** Index of currently focused actor */
-    int32 CurrentActorIndex;
+    FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
+    ENsUILayer GetTopActiveLayer() const;
+    UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
+    void MoveFocusWithFallback(EUINavigation Direction);
+    UWidget* FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origin, EUINavigation Direction) const;
 
-    /** Whether we are in actor-selection mode */
-    bool bActorSelectionActive;
+    void UpdateCursorToFocusedWidget();
+    void UpdateCursorVisibility();
 
-    /** Find the next actor relative to current one based on navigation direction */
-    int32 FindBestActorBySpatialSearch(int32 CurrentIndex, EUINavigation NavDir) const;
-
-    /** Get center of actor's screen-space bounds */
-    FVector2D GetActorScreenCenter(const FNsUIActorFocusInfo& Info) const;
+#if WITH_EDITOR
+    void RefreshDebugOverlay();
+#endif
 };
