@@ -2,8 +2,12 @@
 
 #include "NsUICursor.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/PanelWidget.h"
+#include "Components/CanvasPanel.h"
+#include "Components/Image.h"
+#include "Styling/SlateRoundedBoxBrush.h"
 #include "Widgets/SViewport.h"
 
 UNsUICursor::UNsUICursor(const FObjectInitializer& ObjectInitializer)
@@ -11,11 +15,23 @@ UNsUICursor::UNsUICursor(const FObjectInitializer& ObjectInitializer)
     , TargetAnchor(FVector2D(0.0f, 0.5f))
     , CursorAlignment(FVector2D(1.0f, 0.5f))
     , HorizontalPadding(6.0f)
+    , CursorBrush(FSlateRoundedBoxBrush(FLinearColor(0.1f, 1.0f, 0.8f), 1.5f))
+    , RootCanvas(nullptr)
+    , CursorImage(nullptr)
 {
+}
+
+void UNsUICursor::NativePreConstruct()
+{
+    Super::NativePreConstruct();
+    EnsureDefaultContent();
+    RefreshDefaultStyle();
 }
 
 void UNsUICursor::MoveToWidget(UWidget* const InTarget)
 {
+    EnsureDefaultContent();
+
     // Hide if no valid target.
     if (!IsValid(InTarget) || !InTarget->IsVisible())
     {
@@ -148,6 +164,8 @@ void UNsUICursor::MoveToWidget(UWidget* const InTarget)
 
 void UNsUICursor::MoveToScreenPosition(const FVector2D& InViewportPos)
 {
+    EnsureDefaultContent();
+
     // Ensure our own geometry is up to date
     ForceLayoutPrepass();
     const FVector2D CursorSize = GetDesiredSize();
@@ -181,4 +199,47 @@ void UNsUICursor::MoveToScreenPosition(const FVector2D& InViewportPos)
     }
 
     SetVisibility(ESlateVisibility::Visible);
+}
+
+void UNsUICursor::EnsureDefaultContent()
+{
+    if (WidgetTree == nullptr)
+    {
+        return;
+    }
+
+    if (RootCanvas == nullptr)
+    {
+        if (UWidget* ExistingRoot = WidgetTree->RootWidget)
+        {
+            RootCanvas = Cast<UCanvasPanel>(ExistingRoot);
+        }
+        else
+        {
+            RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("CursorRoot"));
+            WidgetTree->RootWidget = RootCanvas;
+        }
+    }
+
+    if (CursorImage == nullptr)
+    {
+        CursorImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("CursorImage"));
+        if (RootCanvas)
+        {
+            if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(CursorImage))
+            {
+                Slot->SetAutoSize(true);
+                Slot->SetZOrder(9999);
+            }
+        }
+    }
+}
+
+void UNsUICursor::RefreshDefaultStyle()
+{
+    if (CursorImage)
+    {
+        CursorImage->SetBrush(CursorBrush);
+        CursorImage->SetColorAndOpacity(CursorBrush.TintColor.GetSpecifiedColor());
+    }
 }

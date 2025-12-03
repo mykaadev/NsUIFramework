@@ -135,9 +135,16 @@ void UNsUISubsystem::SetActiveUILayout(const TSoftClassPtr<UNsUILayout>& InLayou
         if (bCursorEnabled)
         {
             const UNsUISettings* Settings = UNsUISettings::GetSettings();
+
+            TSubclassOf<UNsUICursor> CursorClass = UNsUICursor::StaticClass();
             if (Settings && !Settings->CursorWidgetClass.IsNull())
             {
-                CursorWidget = CreateWidget<UNsUICursor>(LocalPlayerController, Settings->CursorWidgetClass.LoadSynchronous());
+                CursorClass = Settings->CursorWidgetClass.LoadSynchronous();
+            }
+
+            if (CursorClass != nullptr)
+            {
+                CursorWidget = CreateWidget<UNsUICursor>(LocalPlayerController, CursorClass);
                 if (CursorWidget)
                 {
                     CursorWidget->AddToViewport(1000);

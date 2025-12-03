@@ -4,7 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Styling/SlateBrush.h"
 #include "NsUICursor.generated.h"
+
+
+class UCanvasPanel;
+class UCanvasPanelSlot;
+class UImage;
 
 /**
  * Visual-only focus cursor controlled by the subsystem.
@@ -40,4 +46,25 @@ public:
     /** Cursor Horizontal Padding. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cursor")
     float HorizontalPadding;
+
+    /** Default Slate brush used when the widget is constructed without designer content. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cursor", meta=(ShowOnlyInnerProperties))
+    FSlateBrush CursorBrush;
+
+protected:
+    virtual void NativePreConstruct() override;
+
+private:
+    /** Ensures a minimal visual is available even without a BP-created widget tree. */
+    void EnsureDefaultContent();
+
+    /** Applies brush/padding settings to the generated widgets. */
+    void RefreshDefaultStyle();
+
+private:
+    UPROPERTY(Transient)
+    UCanvasPanel* RootCanvas;
+
+    UPROPERTY(Transient)
+    UImage* CursorImage;
 };

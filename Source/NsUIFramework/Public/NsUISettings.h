@@ -16,6 +16,8 @@ class NSUIFRAMEWORK_API UNsUISettings : public UDeveloperSettings
     GENERATED_BODY()
 
 public:
+    UNsUISettings(const FObjectInitializer& ObjectInitializer);
+
     /** Get Game Settings */
     UFUNCTION(BlueprintCallable, Category = "Game Settings")
     static UNsUISettings* GetSettings();
