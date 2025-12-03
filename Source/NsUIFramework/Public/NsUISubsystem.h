@@ -2,6 +2,7 @@
 
 #include "NsUIFrameworkTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
+#include "UObject/SoftObjectPtr.h"
 #include "NsUISubsystem.generated.h"
 
 class UNsUILayout;
@@ -23,6 +24,7 @@ public:
     static UNsUISubsystem* GetSubsystem();
 
     UUserWidget* PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer);
+    UUserWidget* PushWidgetToLayer(TSoftClassPtr<UUserWidget> ScreenClass, ENsUILayer Layer);
     void PopWidgetFromLayer(ENsUILayer Layer);
     void PopAllWidgetsFromLayer(ENsUILayer Layer);
 

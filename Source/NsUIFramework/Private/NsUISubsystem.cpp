@@ -185,6 +185,17 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenCl
     return Screen;
 }
 
+UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSoftClassPtr<UUserWidget> ScreenClass, ENsUILayer Layer)
+{
+    if (ScreenClass.IsNull())
+    {
+        return nullptr;
+    }
+
+    TSubclassOf<UUserWidget> LoadedClass = ScreenClass.LoadSynchronous();
+    return LoadedClass ? PushWidgetToLayer(LoadedClass, Layer) : nullptr;
+}
+
 void UNsUISubsystem::PopWidgetFromLayer(ENsUILayer Layer)
 {
     EnsureLayout();
