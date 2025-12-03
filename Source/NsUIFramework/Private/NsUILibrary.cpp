@@ -1,30 +1,10 @@
 #include "NsUILibrary.h"
 
-#include "Engine/LocalPlayer.h"
-#include "Engine/World.h"
 #include "NsUISubsystem.h"
 
-namespace
+UUserWidget* UNsUILibrary::Push(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer)
 {
-UNsUISubsystem* GetSubsystemFromContext(UObject* WorldContextObject)
-{
-    if (!WorldContextObject)
-    {
-        return nullptr;
-    }
-
-    if (ULocalPlayer* LocalPlayer = WorldContextObject->GetWorld() ? WorldContextObject->GetWorld()->GetFirstLocalPlayerFromController() : nullptr)
-    {
-        return LocalPlayer->GetSubsystem<UNsUISubsystem>();
-    }
-
-    return nullptr;
-}
-}
-
-UUserWidget* UNsUILibrary::Push(UObject* WorldContextObject, TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer)
-{
-    if (UNsUISubsystem* Subsystem = GetSubsystemFromContext(WorldContextObject))
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
         return Subsystem->PushWidgetToLayer(ScreenClass, Layer);
     }
@@ -32,25 +12,25 @@ UUserWidget* UNsUILibrary::Push(UObject* WorldContextObject, TSubclassOf<UUserWi
     return nullptr;
 }
 
-void UNsUILibrary::Pop(UObject* WorldContextObject, ENsUILayer Layer)
+void UNsUILibrary::Pop(ENsUILayer Layer)
 {
-    if (UNsUISubsystem* Subsystem = GetSubsystemFromContext(WorldContextObject))
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
         Subsystem->PopWidgetFromLayer(Layer);
     }
 }
 
-void UNsUILibrary::PopAll(UObject* WorldContextObject, ENsUILayer Layer)
+void UNsUILibrary::PopAll(ENsUILayer Layer)
 {
-    if (UNsUISubsystem* Subsystem = GetSubsystemFromContext(WorldContextObject))
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
         Subsystem->PopAllWidgetsFromLayer(Layer);
     }
 }
 
-void UNsUILibrary::ToggleDebugOverlay(UObject* WorldContextObject)
+void UNsUILibrary::ToggleDebugOverlay()
 {
-    if (UNsUISubsystem* Subsystem = GetSubsystemFromContext(WorldContextObject))
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
         Subsystem->ToggleDebugOverlay();
     }

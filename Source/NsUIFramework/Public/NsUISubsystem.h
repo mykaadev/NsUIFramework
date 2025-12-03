@@ -20,6 +20,8 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
+    static UNsUISubsystem* GetSubsystem();
+
     UUserWidget* PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer);
     void PopWidgetFromLayer(ENsUILayer Layer);
     void PopAllWidgetsFromLayer(ENsUILayer Layer);

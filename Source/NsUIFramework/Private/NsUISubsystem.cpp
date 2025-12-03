@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+#include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
@@ -25,6 +26,33 @@ UNsUISubsystem::UNsUISubsystem()
     , LastInputSource(ENsUIInputSource::KeyboardGamepad)
 {
     DefaultLayoutClass = UNsUILayout::StaticClass();
+}
+
+UNsUISubsystem* UNsUISubsystem::GetSubsystem()
+{
+    if (!GEngine)
+    {
+        return nullptr;
+    }
+
+    for (const FWorldContext& Context : GEngine->GetWorldContexts())
+    {
+        if (const UWorld* World = Context.World())
+        {
+            if (World->IsGameWorld() || World->IsPlayInEditor())
+            {
+                if (ULocalPlayer* LocalPlayer = World->GetFirstLocalPlayerFromController())
+                {
+                    if (UNsUISubsystem* Subsystem = LocalPlayer->GetSubsystem<UNsUISubsystem>())
+                    {
+                        return Subsystem;
+                    }
+                }
+            }
+        }
+    }
+
+    return nullptr;
 }
 
 void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)

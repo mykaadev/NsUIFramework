@@ -10,15 +10,15 @@ class NSUIFRAMEWORK_API UNsUILibrary : public UBlueprintFunctionLibrary
     GENERATED_BODY()
 
 public:
-    UFUNCTION(BlueprintCallable, Category = "NsUI", meta = (WorldContext = "WorldContextObject"))
-    static UUserWidget* Push(UObject* WorldContextObject, TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer);
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    static UUserWidget* Push(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer);
 
-    UFUNCTION(BlueprintCallable, Category = "NsUI", meta = (WorldContext = "WorldContextObject"))
-    static void Pop(UObject* WorldContextObject, ENsUILayer Layer);
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    static void Pop(ENsUILayer Layer);
 
-    UFUNCTION(BlueprintCallable, Category = "NsUI", meta = (WorldContext = "WorldContextObject"))
-    static void PopAll(UObject* WorldContextObject, ENsUILayer Layer);
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    static void PopAll(ENsUILayer Layer);
 
-    UFUNCTION(BlueprintCallable, Category = "NsUI", meta = (WorldContext = "WorldContextObject"))
-    static void ToggleDebugOverlay(UObject* WorldContextObject);
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    static void ToggleDebugOverlay();
 };
