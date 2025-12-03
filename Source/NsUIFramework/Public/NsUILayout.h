@@ -4,80 +4,63 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "NsUILayer.h"
-#include "NsUILibrary.h"
 #include "NsUILayout.generated.h"
 
+class UNsUILayer;
+class UNsUIWidget;
+
 /**
- * Nulled Softworks UI Layout
+ * Root layout that owns named layers.
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
 {
     GENERATED_BODY()
 
-// Functions
 public:
-
-    //~ Begin UUserWidget Interface
     virtual void NativeOnInitialized() override;
-    //~ End UUserWidget Interface
 
-    /** Register Layer */
-    UFUNCTION(BlueprintCallable)
-    void RegisterLayer(const ENsUILayerType InLayerType, class UNsUILayer* const InLayer);
+    /** Register a layer with a friendly name. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    void RegisterLayer(FName LayerName, UNsUILayer* Layer);
 
-    /** Unregister Layer */
-    UFUNCTION(BlueprintCallable)
-    bool UnregisterLayer(const ENsUILayerType InLayerType);
+    /** Remove a registered layer. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    bool UnregisterLayer(FName LayerName);
 
-    /** Push content to layer */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass);
+    /** Retrieve a layer by name. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    UNsUILayer* GetLayer(FName LayerName) const;
 
-    /** Pop content form layer */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* PopContentFromLayer(ENsUILayerType InLayerType);
+    /** Access to registered layers for internal queries. */
+    const TMap<FName, TObjectPtr<UNsUILayer>>& GetRegisteredLayers() const { return RegisteredLayers; }
 
-    /** Clear all layers */
-    UFUNCTION(BlueprintCallable)
+    /** Clear all stacks in all layers. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
     void ClearAllLayers() const;
 
-    /** Clear layer */
-    UFUNCTION(BlueprintCallable)
-    void ClearLayer(const ENsUILayerType InLayerType);
+private:
+    void EnsureDefaultLayers();
 
-    /** Find Invoker widget in this layout */
-    class UNsUIWidgetStackElement* FindInvokerWidgetInLayout(const class UNsUIWidgetStackElement* InWidget);
+private:
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UNsUILayer> GameStaticLayer;
 
-    // Variables
-public:
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UNsUILayer> GameMenuLayer;
 
-    /** Any static elements present in the game (eg: prompts, time, navigation) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameStaticLayer;
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UNsUILayer> GameModalLayer;
 
-    /** Any pop-up elements present in the game (eg: inventory, shops) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameMenuLayer;
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UNsUILayer> ApplicationStaticLayer;
 
-    /** Any pop-up elements present in the game (eg: confirmations) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> GameModalLayer;
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UNsUILayer> ApplicationMenuLayer;
 
-    /** Any static elements present in the application (eg: version, prompts) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationStaticLayer;
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UNsUILayer> ApplicationModalLayer;
 
-    /** Any static elements present in the application (eg: menus, consoles, debug) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationMenuLayer;
-
-    /** Any pop-up elements present in the application (eg: confirmations) */
-    UPROPERTY(meta = (BindWidget))
-    TObjectPtr<class UNsUILayer> ApplicationModalLayer;
-
-    /** Registered Layers */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-    TMap<ENsUILayerType, UNsUILayer*> RegisteredLayers;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NsUI", meta = (AllowPrivateAccess = "true"))
+    TMap<FName, TObjectPtr<UNsUILayer>> RegisteredLayers;
 };

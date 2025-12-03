@@ -3,81 +3,46 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NsUILibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "NsUILayer.generated.h"
 
+class UNsUIWidget;
+
 /**
- * Nulled Softworks UI Layer
+ * A layer hosts a stack of UNsUIWidget instances and manages focus restoration.
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayer : public UUserWidget
 {
     GENERATED_BODY()
 
-// Functions
 public:
-
     //~ Begin UUserWidget Interface
-    virtual TSharedRef<class SWidget> RebuildWidget() override;
+    virtual TSharedRef<SWidget> RebuildWidget() override;
     //~ End UUserWidget Interface
 
-    /** Push content */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* Push(const TSoftClassPtr<class UUserWidget>& InClass);
+    /** Push a widget instance on this layer's stack. */
+    bool PushWidget(UNsUIWidget* Widget, UWidget* PreviousFocus);
 
-    /** Pop content */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* Pop();
+    /** Pop the top widget off this layer. */
+    UNsUIWidget* PopWidget();
 
-    /** Get Stack */
-    UFUNCTION(BlueprintCallable)
-    TArray<class UNsUIWidgetStackElement*> GetStack() const;
+    /** Pop until only the root widget remains. */
+    void PopToRoot();
 
-    /** Clear stack */
-    UFUNCTION(BlueprintCallable)
-    void ClearStack();
+    /** Returns the widget currently on top of the stack. */
+    UNsUIWidget* PeekWidget() const;
 
-    /** Peek */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* Peek();
+    /** Attempts to restore focus to the last saved widget for this layer. */
+    UWidget* RestoreLastFocus();
 
-    /** Collapse top widget */
-    UFUNCTION(BlueprintCallable)
-    void CollapseTop();
-
-    /** Show top widget*/
-    UFUNCTION(BlueprintCallable)
-    void ShowTop();
-
-    /** Find Stack Element */
-    UFUNCTION(BlueprintCallable)
-    class UNsUIWidgetStackElement* FindStackElement(const UUserWidget* InInvokerScope, const UWidget* InInvokerElement);
-
-    /** Get stack list names */
-    UFUNCTION(BlueprintCallable)
-    FText GetStackListNames();
-
-    /** Gets the initial focus for a widget */
-    UFUNCTION(BlueprintCallable)
-    class UWidget* GetInitialFocusForWidget(class UUserWidget* InWidget);
+    /** Root container owning the layer content. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NsUI")
+    TObjectPtr<class UPanelWidget> LayerRoot;
 
 private:
+    UWidget* FindInitialFocus(UNsUIWidget* Widget) const;
 
-    /** Handles the push functionality of the widget when it implements our interface */
-    UFUNCTION()
-    void PushWidget(class UUserWidget* InWidget);
-
-// Variables
-public:
-
-    /** Border that contains our widget */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NsUI")
-    TObjectPtr<class UBorder> LayerRoot;
-
-protected:
-
-    /** Widget Stack */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-    TArray<class UNsUIWidgetStackElement*> Stack;
+    TArray<TWeakObjectPtr<UNsUIWidget>> WidgetStack;
+    TArray<TWeakObjectPtr<UWidget>> FocusHistory;
 };

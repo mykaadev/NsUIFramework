@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2025 nulled.softworks. All rights reserved.
+// Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #pragma once
 
@@ -13,53 +13,30 @@ class NSUIFRAMEWORK_API UNsUINavigation : public UInterface
 };
 
 /**
- * UI Navigation Interface
+ * Thin semantic hooks that widgets can implement to participate in high-level UI behaviors.
  */
 class NSUIFRAMEWORK_API INsUINavigation
 {
     GENERATED_BODY()
 
-// Functions
 public:
-
-    /** Get up Neighbor */
-    /** On enter the interaction radius */
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-    class UWidget* GetUpNeighbor();
-    virtual class UWidget* GetUpNeighbor_Implementation() = 0;
-
-    /** Get down Neighbor */
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-    class UWidget* GetDownNeighbor();
-    virtual class UWidget* GetDownNeighbor_Implementation() = 0;
-
-    /** Get left neighbor */
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-    class UWidget* GetLeftNeighbor();
-    virtual class UWidget* GetLeftNeighbor_Implementation() = 0;
-
-    /** Get right neighbor */
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-    class UWidget* GetRightNeighbor();
-    virtual class UWidget* GetRightNeighbor_Implementation() = 0;
-
-    /** Handle UI Confirm */
+    /** Invoked when the UI confirm action is triggered while this widget is focused. */
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
     void HandleUIConfirm();
-    virtual void HandleUIConfirm_Implementation() = 0;
 
-    /** Handle UI Cancel */
+    /** Invoked when the UI cancel action is triggered while this widget is focused. */
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
     void HandleUICancel();
-    virtual void HandleUICancel_Implementation() = 0;
 
-    /** On Widget Pushed */
+    /** Called when the widget is pushed onto a layer stack and becomes active. */
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-    void OnWidgetPushed();
-    virtual void OnWidgetPushed_Implementation() = 0;
+    void OnWidgetActivated();
 
-    /** Get initial focus widget */
+    /** Called when the widget is removed from the stack or deactivated. */
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-    class UWidget* GetInitialFocusWidget();
-    virtual class UWidget* GetInitialFocusWidget_Implementation() = 0;
+    void OnWidgetDeactivated();
+
+    /** Optional: return the widget that should receive initial focus when this widget is activated. */
+    UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+    UWidget* GetInitialFocusWidget() const;
 };

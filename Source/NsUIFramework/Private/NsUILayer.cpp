@@ -1,13 +1,15 @@
 // Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILayer.h"
-#include "Blueprint/UserWidget.h"
-#include "Blueprint/WidgetTree.h"
-#include "Components/Border.h"
-#include "INsUINavigation.h"
-#include "NsUISubsystem.h"
 
-TSharedRef<class SWidget> UNsUILayer::RebuildWidget()
+#include "Blueprint/WidgetTree.h"
+#include "Components/Overlay.h"
+#include "Components/PanelWidget.h"
+#include "INsUINavigation.h"
+#include "NsUILibrary.h"
+#include "NsUIWidget.h"
+
+TSharedRef<SWidget> UNsUILayer::RebuildWidget()
 {
     if (WidgetTree == nullptr)
     {
@@ -16,201 +18,142 @@ TSharedRef<class SWidget> UNsUILayer::RebuildWidget()
 
     if (WidgetTree->RootWidget == nullptr)
     {
-        LayerRoot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("LayerRoot"));
-        WidgetTree->RootWidget = LayerRoot;
-
-        LayerRoot->SetPadding(FMargin(0.f));
-        LayerRoot->SetHorizontalAlignment(HAlign_Fill);
-        LayerRoot->SetVerticalAlignment(VAlign_Fill);
-
-        // Kill the white background
-        FSlateBrush Brush;
-        Brush.DrawAs = ESlateBrushDrawType::NoDrawType;
-        Brush.TintColor = FSlateColor(FLinearColor::Transparent);
-        LayerRoot->SetBrush(Brush);
-
-        LayerRoot->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-    }
-    else
-    {
-        LayerRoot = Cast<UBorder>(WidgetTree->RootWidget);
+        UOverlay* RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("LayerRoot"));
+        RootOverlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+        WidgetTree->RootWidget = RootOverlay;
     }
 
+    LayerRoot = Cast<UPanelWidget>(WidgetTree->RootWidget);
     return Super::RebuildWidget();
 }
 
-UNsUIWidgetStackElement* UNsUILayer::Push(const TSoftClassPtr<UUserWidget>& InClass)
+bool UNsUILayer::PushWidget(UNsUIWidget* Widget, UWidget* PreviousFocus)
 {
-    UNsUISubsystem* UISubsystem = UNsUISubsystem::GetSubsystem();
-    if (LayerRoot != nullptr && InClass != nullptr && UISubsystem != nullptr)
+    if (!IsValid(Widget) || !IsValid(LayerRoot))
     {
-        if (APlayerController* const OwningPlayer = GetOwningPlayer())
-        {
-            if (UUserWidget* const NewWidget = CreateWidget(OwningPlayer, InClass.LoadSynchronous()))
-            {
-                // run push logic from the interface
-                PushWidget(NewWidget);
-
-                // create new stack element
-                UNsUIWidgetStackElement* const NewStackElement = NewObject<UNsUIWidgetStackElement>(OwningPlayer);
-                NewStackElement->WidgetScope = NewWidget;
-                NewStackElement->WidgetScopeFocusedElement = GetInitialFocusForWidget(NewWidget);
-                NewStackElement->InvokerWidgetScope = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScope : nullptr;
-                NewStackElement->InvokerElement = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScopeFocusedElement : nullptr;
-                NewStackElement->InvokerLayerType = UISubsystem->GetCurrentScope() != nullptr ? UISubsystem->GetCurrentScope()->WidgetScopeLayerType : ENsUILayerType::None;
-
-                // handle the push to the layer
-                CollapseTop();                      // hide the current top element
-                LayerRoot->ClearChildren();         // clear the root
-                Stack.Emplace(NewStackElement);     // add new element to stack
-                LayerRoot->AddChild(NewWidget);     // push it to the root
-                ShowTop();                          // show the new element on top of the stack
-                return Peek();                      // Peek() now gives us this new element
-            }
-        }
-    }
-    
-    return nullptr;
-}
-
-UNsUIWidgetStackElement* UNsUILayer::Pop()
-{
-    if (!Stack.IsEmpty())
-    {
-        // Pop the top widget out of the stack
-        UNsUIWidgetStackElement* TopElement = Peek();
-        if (TopElement != nullptr && TopElement->WidgetScope != nullptr && LayerRoot != nullptr)
-        {
-            UNsUIWidgetStackElement* CachedInfoInvoker = TopElement;
-
-            // Remove the current widget
-            TopElement->WidgetScope->RemoveFromParent();
-            Stack.Remove(TopElement);
-            LayerRoot->ClearChildren();
-
-            // Enable the one that is now on the top of the stack
-            TopElement = Peek();
-            if (TopElement != nullptr && TopElement->WidgetScope != nullptr)
-            {
-                TopElement->WidgetScope->SetVisibility(ESlateVisibility::Visible);
-                LayerRoot->AddChild(TopElement->WidgetScope);
-                return TopElement;
-            }
-            else // we don't have any more widgets in this layer so we must pass the invoker info to the layout so he can handle it
-            {
-                return CachedInfoInvoker;
-            }
-        }
+        return false;
     }
 
-    return nullptr;
-}
-
-TArray<UNsUIWidgetStackElement*> UNsUILayer::GetStack() const
-{
-    return Stack;
-}
-
-void UNsUILayer::ClearStack()
-{
-    for (UNsUIWidgetStackElement* StackElement : Stack)
+    if (UPanelWidget* Panel = Cast<UPanelWidget>(LayerRoot))
     {
-        if (StackElement->WidgetScope != nullptr)
+        if (UNsUIWidget* Top = PeekWidget())
         {
-            StackElement->WidgetScope->RemoveFromParent();
+            Top->SetVisibility(ESlateVisibility::Collapsed);
         }
+
+        FocusHistory.Add(PreviousFocus);
+        WidgetStack.Add(Widget);
+
+        Panel->ClearChildren();
+        Panel->AddChild(Widget);
+        Widget->SetVisibility(ESlateVisibility::Visible);
+
+        if (Widget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+        {
+            Widget->Execute_OnWidgetActivated(Widget);
+        }
+
+        if (UWidget* InitialFocus = FindInitialFocus(Widget))
+        {
+            InitialFocus->SetKeyboardFocus();
+            InitialFocus->SetUserFocus(GetOwningPlayer());
+        }
+        return true;
     }
 
-    Stack.Empty();
+    return false;
+}
 
-    if (LayerRoot != nullptr)
+UNsUIWidget* UNsUILayer::PopWidget()
+{
+    if (!WidgetStack.Num())
+    {
+        return nullptr;
+    }
+
+    UNsUIWidget* Removed = WidgetStack.Pop().Get();
+    if (Removed)
+    {
+        if (Removed->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+        {
+            Removed->Execute_OnWidgetDeactivated(Removed);
+        }
+        Removed->RemoveFromParent();
+    }
+
+    if (LayerRoot)
     {
         LayerRoot->ClearChildren();
     }
-}
 
-UNsUIWidgetStackElement* UNsUILayer::Peek()
-{
-    return !Stack.IsEmpty() ? Stack.Last() : nullptr;
-}
-
-void UNsUILayer::CollapseTop()
-{
-    if (UNsUIWidgetStackElement* TopElement = Peek())
+    if (UNsUIWidget* NewTop = PeekWidget())
     {
-        if (TopElement->WidgetScope != nullptr)
+        NewTop->SetVisibility(ESlateVisibility::Visible);
+        if (LayerRoot)
         {
-            TopElement->WidgetScope->SetVisibility(ESlateVisibility::Collapsed);
+            LayerRoot->AddChild(NewTop);
         }
+    }
+
+    RestoreLastFocus();
+    return Removed;
+}
+
+void UNsUILayer::PopToRoot()
+{
+    while (WidgetStack.Num() > 1)
+    {
+        PopWidget();
     }
 }
 
-void UNsUILayer::ShowTop()
+UNsUIWidget* UNsUILayer::PeekWidget() const
 {
-    if (UNsUIWidgetStackElement* const TopElement = Peek())
-    {
-        if (TopElement->WidgetScope != nullptr)
-        {
-            TopElement->WidgetScope->SetVisibility(ESlateVisibility::Visible);
-        }
-    }
+    return WidgetStack.IsEmpty() ? nullptr : WidgetStack.Last().Get();
 }
 
-UNsUIWidgetStackElement* UNsUILayer::FindStackElement(const UUserWidget* InInvokerScope, const UWidget* InInvokerElement)
+UWidget* UNsUILayer::RestoreLastFocus()
 {
-    for (int32 Index = Stack.Num() - 1; Index >= 0; --Index)
+    while (FocusHistory.Num() > 0)
     {
-        if (Stack[Index] != nullptr)
+        if (UWidget* Candidate = FocusHistory.Pop().Get())
         {
-            if (Stack[Index]->WidgetScope == InInvokerScope && Stack[Index]->WidgetScopeFocusedElement == InInvokerElement)
+            if (Candidate->GetIsEnabled() && Candidate->IsVisible())
             {
-                return Stack[Index];
+                Candidate->SetKeyboardFocus();
+                Candidate->SetUserFocus(GetOwningPlayer());
+                return Candidate;
             }
         }
     }
 
-    return nullptr;
-}
-
-FText UNsUILayer::GetStackListNames()
-{
-    TArray<FString> StackListNames;
-
-    for (int32 Index = Stack.Num() - 1; Index >= 0; --Index)
+    if (UNsUIWidget* Top = PeekWidget())
     {
-        if (Stack[Index]->WidgetScope != nullptr)
+        if (UWidget* Initial = FindInitialFocus(Top))
         {
-            StackListNames.Emplace(Stack[Index]->WidgetScope->GetName());
-        }
-    }
-
-    return FText::FromString(FString::Join(StackListNames, TEXT("\n")));
-}
-
-UWidget* UNsUILayer::GetInitialFocusForWidget(UUserWidget* InWidget)
-{
-    if (InWidget != nullptr &&
-        InWidget->GetClass() != nullptr &&
-        InWidget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
-    {
-        if (const INsUINavigation* const NavigationInterface = Cast<INsUINavigation>(InWidget))
-        {
-            return NavigationInterface->Execute_GetInitialFocusWidget(InWidget);
+            Initial->SetKeyboardFocus();
+            Initial->SetUserFocus(GetOwningPlayer());
+            return Initial;
         }
     }
 
     return nullptr;
 }
 
-void UNsUILayer::PushWidget(UUserWidget* InWidget)
+UWidget* UNsUILayer::FindInitialFocus(UNsUIWidget* Widget) const
 {
-    if (InWidget != nullptr &&
-        InWidget->GetClass() != nullptr &&
-        InWidget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+    if (Widget == nullptr)
     {
-        if (const INsUINavigation* const NavigationInterface = Cast<INsUINavigation>(InWidget))
+        return nullptr;
+    }
+
+    if (Widget->GetClass()->ImplementsInterface(UNsUINavigation::StaticClass()))
+    {
+        if (UWidget* Explicit = Widget->Execute_GetInitialFocusWidget(Widget))
         {
-            NavigationInterface->Execute_OnWidgetPushed(InWidget);
+            return Explicit;
         }
     }
+
+    return UNsUILibrary::FindFirstFocusableDescendant(Widget);
 }

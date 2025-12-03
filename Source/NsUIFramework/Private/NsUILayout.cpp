@@ -1,170 +1,99 @@
 // Copyright (C) 2025 nulled.softworks. All rights reserved.
 
 #include "NsUILayout.h"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "NsUILayer.h"
-#include "NsUILibrary.h"
 
 void UNsUILayout::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
-
-    if (WidgetTree == nullptr)
-    {
-        WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
-    }
-
-    // Ensure we have a root overlay
-    UOverlay* RootOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
-    if (RootOverlay == nullptr && WidgetTree != nullptr)
-    {
-        if (WidgetTree->RootWidget == nullptr)
-        {
-            RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
-            WidgetTree->RootWidget = RootOverlay;
-        }
-        else
-        {
-            UWidget* const ExistingRoot = WidgetTree->RootWidget;
-
-            RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
-            WidgetTree->RootWidget = RootOverlay;
-
-            if (UOverlaySlot* const ExistingSlot = RootOverlay->AddChildToOverlay(ExistingRoot))
-            {
-                ExistingSlot->SetHorizontalAlignment(HAlign_Fill);
-                ExistingSlot->SetVerticalAlignment(VAlign_Fill);
-            }
-        }
-    }
-
-    // Helper: create missing layers, but keep any that BP already provided
-    auto EnsureLayer = [&](TObjectPtr<UNsUILayer>& LayerPtr, const FName Name) -> void
-    {
-        if (LayerPtr == nullptr && RootOverlay != nullptr && WidgetTree != nullptr)
-        {
-            if (UNsUILayer* const NewLayer = WidgetTree->ConstructWidget<UNsUILayer>(UNsUILayer::StaticClass(), Name))
-            {
-                if (UOverlaySlot* const Slot = RootOverlay->AddChildToOverlay(NewLayer))
-                {
-                    Slot->SetHorizontalAlignment(HAlign_Fill);
-                    Slot->SetVerticalAlignment(VAlign_Fill);
-                }
-
-                LayerPtr = NewLayer;
-            }
-        }
-    };
-
-    EnsureLayer(GameStaticLayer,        TEXT("GameStaticLayer"));
-    EnsureLayer(GameMenuLayer,          TEXT("GameMenuLayer"));
-    EnsureLayer(GameModalLayer,         TEXT("GameModalLayer"));
-    EnsureLayer(ApplicationStaticLayer, TEXT("ApplicationStaticLayer"));
-    EnsureLayer(ApplicationMenuLayer,   TEXT("ApplicationMenuLayer"));
-    EnsureLayer(ApplicationModalLayer,  TEXT("ApplicationModalLayer"));
-
-    // Now register whatever layers we have (BP-provided or auto-created)
-    RegisterLayer(ENsUILayerType::GameStatic,        GameStaticLayer);
-    RegisterLayer(ENsUILayerType::GameMenu,          GameMenuLayer);
-    RegisterLayer(ENsUILayerType::GameModal,         GameModalLayer);
-    RegisterLayer(ENsUILayerType::ApplicationStatic, ApplicationStaticLayer);
-    RegisterLayer(ENsUILayerType::ApplicationMenu,   ApplicationMenuLayer);
-    RegisterLayer(ENsUILayerType::ApplicationModal,  ApplicationModalLayer);
+    EnsureDefaultLayers();
 }
 
-void UNsUILayout::RegisterLayer(const ENsUILayerType InLayerType, class UNsUILayer* const InLayer)
+void UNsUILayout::RegisterLayer(FName LayerName, UNsUILayer* Layer)
 {
-    if (InLayer != nullptr && !RegisteredLayers.Contains(InLayerType))
+    if (!LayerName.IsNone() && Layer != nullptr)
     {
-        RegisteredLayers.Emplace(InLayerType, InLayer);
+        RegisteredLayers.FindOrAdd(LayerName) = Layer;
     }
 }
 
-bool UNsUILayout::UnregisterLayer(const ENsUILayerType InLayerType)
+bool UNsUILayout::UnregisterLayer(FName LayerName)
 {
-    if ( UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (UNsUILayer** Found = RegisteredLayers.Find(LayerName))
     {
-        FoundLayer->RemoveFromParent();
-    }
-
-    return RegisteredLayers.Remove(InLayerType) > 0;
-}
-
-UNsUIWidgetStackElement* UNsUILayout::PushContentToLayer(const ENsUILayerType InLayerType, const TSoftClassPtr<class UUserWidget>& InWidgetClass)
-{
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
-    {
-        if (UNsUIWidgetStackElement* Content = FoundLayer->Push(InWidgetClass))
+        if (UNsUILayer* Layer = *Found)
         {
-            ForceLayoutPrepass();
-            // The new content that was just pushed
-            Content->WidgetScopeLayerType = InLayerType; // fill the layer where he belongs to
-            return Content;
+            Layer->RemoveFromParent();
         }
+        RegisteredLayers.Remove(LayerName);
+        return true;
     }
-
-    
-    return nullptr;
+    return false;
 }
 
-UNsUIWidgetStackElement* UNsUILayout::PopContentFromLayer(const ENsUILayerType InLayerType)
+UNsUILayer* UNsUILayout::GetLayer(FName LayerName) const
 {
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (const TObjectPtr<UNsUILayer>* Found = RegisteredLayers.Find(LayerName))
     {
-        // if the layer stack is not empty, we can just keep swapping from widget to widget within that stack
-        // if the layer stack is empty, we use the invoker info, now we have to return the focus to the original widget that pushed this one
-        
-        UNsUIWidgetStackElement* TopElementOrInvokerInfo = FoundLayer->Pop();
-        ForceLayoutPrepass();
-        return FindInvokerWidgetInLayout(TopElementOrInvokerInfo);
+        return Found->Get();
     }
-
     return nullptr;
 }
 
 void UNsUILayout::ClearAllLayers() const
 {
-    TArray<UNsUILayer*> InOutLayers; RegisteredLayers.GenerateValueArray(InOutLayers);
-    for (UNsUILayer* const Layer : InOutLayers)
+    for (const auto& Pair : RegisteredLayers)
     {
-        if (Layer != nullptr)
+        if (UNsUILayer* Layer = Pair.Value)
         {
-            Layer->ClearStack();
+            Layer->PopToRoot();
         }
     }
 }
 
-void UNsUILayout::ClearLayer(const ENsUILayerType InLayerType)
+void UNsUILayout::EnsureDefaultLayers()
 {
-    if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InLayerType))
+    if (WidgetTree == nullptr)
     {
-        FoundLayer->ClearStack();
+        WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
     }
-}
 
-UNsUIWidgetStackElement* UNsUILayout::FindInvokerWidgetInLayout(const UNsUIWidgetStackElement* InWidget)
-{
-    if (InWidget != nullptr)
+    UOverlay* RootOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
+    if (RootOverlay == nullptr)
     {
-        // if this widget was pushed from other widget within or the same layer or not
-        if (InWidget->InvokerWidgetScope != nullptr && InWidget->InvokerElement != nullptr)
+        RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
+        WidgetTree->RootWidget = RootOverlay;
+    }
+
+    auto EnsureLayer = [&](TObjectPtr<UNsUILayer>& Slot, const FName Name)
+    {
+        if (Slot == nullptr)
         {
-            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->InvokerLayerType))
+            if (UNsUILayer* NewLayer = WidgetTree->ConstructWidget<UNsUILayer>(UNsUILayer::StaticClass(), Name))
             {
-                return FoundLayer->FindStackElement(InWidget->InvokerWidgetScope, InWidget->InvokerElement);
-            }     
-        } // if the widget does not have an invoker (could be the first widget summoned to the layer) we retrieve it again
-        else if (InWidget->WidgetScope != nullptr && InWidget->WidgetScopeFocusedElement != nullptr)
-        {
-            if (UNsUILayer* const FoundLayer = *RegisteredLayers.Find(InWidget->WidgetScopeLayerType))
-            {
-                return FoundLayer->FindStackElement(InWidget->WidgetScope, InWidget->WidgetScopeFocusedElement);
-            }     
+                if (UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(NewLayer))
+                {
+                    OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+                    OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+                }
+                Slot = NewLayer;
+            }
         }
-       
-    }
 
-    return nullptr;
+        if (Slot)
+        {
+            RegisterLayer(Name, Slot);
+        }
+    };
+
+    EnsureLayer(GameStaticLayer, TEXT("GameStatic"));
+    EnsureLayer(GameMenuLayer, TEXT("GameMenu"));
+    EnsureLayer(GameModalLayer, TEXT("GameModal"));
+    EnsureLayer(ApplicationStaticLayer, TEXT("ApplicationStatic"));
+    EnsureLayer(ApplicationMenuLayer, TEXT("ApplicationMenu"));
+    EnsureLayer(ApplicationModalLayer, TEXT("ApplicationModal"));
 }

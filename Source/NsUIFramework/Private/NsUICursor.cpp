@@ -19,7 +19,10 @@ void UNsUICursor::MoveToWidget(UWidget* const InTarget)
     // Hide if no valid target.
     if (!IsValid(InTarget) || !InTarget->IsVisible())
     {
-        SetVisibility(ESlateVisibility::Collapsed);
+        if (bHideWhenNoTarget)
+        {
+            SetVisibility(ESlateVisibility::Collapsed);
+        }
         return;
     }
 

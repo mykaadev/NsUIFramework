@@ -27,7 +27,8 @@ public class NsUIFramework : ModuleRules
             {
                 "Core",
                 "UMG",
-                "DeveloperSettings"
+                "DeveloperSettings",
+                "InputCore"
                 // ... add other public dependencies that you statically link with here ...
             }
         );
@@ -39,6 +40,7 @@ public class NsUIFramework : ModuleRules
                 "Engine",
                 "Slate",
                 "SlateCore",
+                "ApplicationCore"
                 // ... add private dependencies that you statically link with here ...
             }
         );
