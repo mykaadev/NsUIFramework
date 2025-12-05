@@ -8,16 +8,7 @@ UNsUICursor::UNsUICursor(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     SetVisibility(ESlateVisibility::HitTestInvisible);
-
-    if (FAppStyle::IsInitialized())
-    {
-        CursorBrush = *FAppStyle::Get().GetBrush("Icons.ChevronRight");
-    }
-    else
-    {
-        CursorBrush = FSlateBrush();
-        CursorBrush.TintColor = FSlateColor(FLinearColor::White);
-    }
+    CursorBrush = *FAppStyle::Get().GetBrush("Icons.ChevronRight");
 }
 
 TSharedRef<SWidget> UNsUICursor::RebuildWidget()

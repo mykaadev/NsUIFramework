@@ -1,7 +1,5 @@
-#include "NsUISubsystem.h"
-
 #include "CoreMinimal.h"
-
+#include "NsUISubsystem.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
@@ -9,14 +7,14 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
-#include "HAL/NumericLimits.h"
 #include "InputCoreTypes.h"
+#include "Math/NumericLimits.h"
 #include "NsUIDebugOverlay.h"
 #include "NsUILayer.h"
 #include "NsUILayout.h"
 #include "NsUIWidget.h"
+#include "Slate/SObjectWidget.h"
 #include "Widgets/SWidget.h"
-#include "Widgets/SObjectWidget.h"
 
 namespace
 {
@@ -80,9 +78,10 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UNsUISubsystem::Deinitialize()
 {
-    if (FSlateApplication::IsInitialized())
+    if (FSlateApplication::IsInitialized() && FocusChangedHandle.IsValid())
     {
         FSlateApplication::Get().OnFocusChanging().Remove(FocusChangedHandle);
+        FocusChangedHandle.Reset();
     }
 
     Super::Deinitialize();
@@ -95,7 +94,7 @@ void UNsUISubsystem::EnsureLayout()
         return;
     }
 
-    ULocalPlayer* LocalPlayer = GetLocalPlayer();
+    const ULocalPlayer* LocalPlayer = GetLocalPlayer();
     if (!LocalPlayer)
     {
         return;
@@ -106,7 +105,8 @@ void UNsUISubsystem::EnsureLayout()
     {
         LayoutClass = UNsUILayout::StaticClass();
     }
-    ActiveLayout = CreateWidget<UNsUILayout>(LocalPlayer, LayoutClass);
+
+    ActiveLayout = CreateWidget<UNsUILayout>(LocalPlayer->GetPlayerController(LocalPlayer->GetWorld()), LayoutClass);
 
     if (!ActiveLayout)
     {
@@ -172,7 +172,7 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenCl
     }
 
     ULocalPlayer* LocalPlayer = GetLocalPlayer();
-    UUserWidget* Screen = LocalPlayer ? CreateWidget<UUserWidget>(LocalPlayer, ScreenClass) : nullptr;
+    UUserWidget* Screen = LocalPlayer ? CreateWidget<UUserWidget>(LocalPlayer->GetPlayerController(LocalPlayer->GetWorld()), ScreenClass) : nullptr;
 
     if (!Screen)
     {
@@ -181,6 +181,7 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenCl
 
     LayerWidget->AddScreen(Screen);
     State.Stack.Add(Screen);
+    RegisterWidgetTree(Screen);
 
     UWidget* FocusTarget = ResolveInitialFocus(Screen);
     if (!FocusTarget)
@@ -343,7 +344,7 @@ void UNsUISubsystem::ToggleDebugOverlay()
 
     if (!DebugOverlay)
     {
-        DebugOverlay = CreateWidget<UNsUIDebugOverlay>(GetLocalPlayer(), UNsUIDebugOverlay::StaticClass());
+        DebugOverlay = CreateWidget<UNsUIDebugOverlay>(GetLocalPlayer()->GetPlayerController(GetLocalPlayer()->GetWorld()), UNsUIDebugOverlay::StaticClass());
         if (DebugOverlay)
         {
             DebugOverlay->AddToViewport(1000);
@@ -385,13 +386,17 @@ void UNsUISubsystem::UpdateFocus(UWidget* Widget, EFocusCause FocusCause)
 
     if (FSlateApplication::IsInitialized())
     {
-        if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
+        const TSharedRef<SWidget> SlateWidget = Widget->TakeWidget();
+
+        SlateToWidgetMap.Add(SlateWidget, Widget);
+
+        if (const ULocalPlayer* const LocalPlayer = GetLocalPlayer())
         {
-            FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), Widget->TakeWidget(), FocusCause);
+            FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, FocusCause);
         }
         else
         {
-            FSlateApplication::Get().SetKeyboardFocus(Widget->TakeWidget(), FocusCause);
+            FSlateApplication::Get().SetKeyboardFocus(SlateWidget, FocusCause);
         }
     }
 
@@ -510,25 +515,69 @@ TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
     return FSlateApplication::Get().GetUserFocusedWidget(KeyboardUserIndex);
 }
 
-void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)
+UWidget* UNsUISubsystem::ResolveWidgetFromSlate(const FWidgetPath& NewPath, const TSharedPtr<SWidget>& NewWidget) const
 {
-    TSharedPtr<SWidget> FocusedSlateWidget = InNewWidget;
-
-    if (!FocusedSlateWidget.IsValid() && InNewPath.Widgets.Num() > 0)
+    // Try the direct widget from OnFocusChanging
+    if (NewWidget.IsValid())
     {
-        FocusedSlateWidget = InNewPath.Widgets.Last().Widget;
+        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(NewWidget))
+        {
+            return Found->Get();
+        }
     }
 
-    if (FocusedSlateWidget.IsValid())
+    // Fallback: climb the path from leaf to root and see
+    //    if any of those Slate widgets are in our map.
+    for (int32 Index = NewPath.Widgets.Num() - 1; Index >= 0; --Index)
     {
-        if (TSharedPtr<SObjectWidget> ObjectWidget = StaticCastSharedPtr<SObjectWidget>(FocusedSlateWidget))
+        const TSharedRef<SWidget>& Candidate = NewPath.Widgets[Index].Widget;
+
+        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(Candidate))
         {
-            if (UWidget* Widget = ObjectWidget->GetWidgetObject())
-            {
-                CurrentFocus = Widget;
-                UpdateCursorToFocusedWidget();
-            }
+            return Found->Get();
         }
+    }
+
+    return nullptr;
+}
+
+void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)
+{
+    UWidget* NewFocusedWidget = ResolveWidgetFromSlate(InNewPath, InNewWidget);
+
+    if (IsValid(NewFocusedWidget))
+    {
+        CurrentFocus = NewFocusedWidget;
+        UpdateCursorToFocusedWidget();
+    }
+    else
+    {
+        // Focus moved somewhere outside our tracked UMG widgets
+        UE_LOG(LogTemp, Warning, TEXT("HandleFocusChanged: Invalid widget object returned from SObjectWidget."));
+        CurrentFocus.Reset();
+    }
+}
+
+void UNsUISubsystem::RegisterWidgetTree(UUserWidget* Root)
+{
+    if (!Root)
+    {
+        return;
+    }
+
+    TArray<UWidget*> Widgets;
+    Root->WidgetTree->GetAllWidgets(Widgets);
+
+    for (UWidget* Widget : Widgets)
+    {
+        if (!Widget)
+        {
+            continue;
+        }
+
+        // This will cache the Slate widget if it hasn’t been created yet
+        TSharedRef<SWidget> SlateWidget = Widget->TakeWidget();
+        SlateToWidgetMap.Add(SlateWidget, Widget);
     }
 }
 

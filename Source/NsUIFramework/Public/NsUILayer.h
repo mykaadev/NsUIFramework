@@ -2,6 +2,7 @@
 
 #include "NsUIFrameworkTypes.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/Border.h"
 #include "NsUILayer.generated.h"
 
 class UPanelWidget;
@@ -23,11 +24,11 @@ public:
     void SetLayerType(ENsUILayer InLayer);
     ENsUILayer GetLayerType() const { return Layer; }
 
-    UPanelWidget* GetRootPanel() const { return RootPanel; }
+    UBorder* GetRootPanel() const { return RootPanel; }
 
 private:
     UPROPERTY()
-    TObjectPtr<UPanelWidget> RootPanel;
+    TObjectPtr<UBorder> RootPanel;
 
     UPROPERTY(EditAnywhere, Category = "NsUI")
     ENsUILayer Layer;

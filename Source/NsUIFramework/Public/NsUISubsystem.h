@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Components/Widget.h"
 #include "NsUIFrameworkTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "Templates/SharedPointer.h"
@@ -55,7 +56,7 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "NsUI")
     TSubclassOf<UNsUILayout> DefaultLayoutClass;
 
-#if WITH_EDITOR
+#if WITH_EDITORONLY_DATA
     UPROPERTY()
     TObjectPtr<class UNsUIDebugOverlay> DebugOverlay;
 #endif
@@ -64,6 +65,9 @@ private:
     ENsUIInputSource LastInputSource;
     TWeakObjectPtr<UWidget> CurrentFocus;
     FDelegateHandle FocusChangedHandle;
+
+    /** Maps focused Slate widgets back to their owning UWidget */
+    TMap<TWeakPtr<SWidget>, TWeakObjectPtr<UWidget>> SlateToWidgetMap;
 
     void EnsureLayout();
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);
@@ -74,7 +78,11 @@ private:
 
     void SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
     TWeakPtr<SWidget> GetSlateFocus() const;
+    UWidget* ResolveWidgetFromSlate(const FWidgetPath& NewPath, const TSharedPtr<SWidget>& NewWidget) const;
+
     void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
+
+    void RegisterWidgetTree(UUserWidget* Root);
 
     FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
     ENsUILayer GetTopActiveLayer() const;

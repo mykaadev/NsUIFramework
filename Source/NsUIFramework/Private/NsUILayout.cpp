@@ -11,20 +11,14 @@ UNsUILayout::UNsUILayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     LayerClass = UNsUILayer::StaticClass();
-
-    if (FAppStyle::IsInitialized())
-    {
-        CursorBrush = *FAppStyle::Get().GetBrush("Icons.ChevronRight");
-    }
+    CursorBrush = *FAppStyle::Get().GetBrush("Icons.ChevronRight");
 }
 
-void UNsUILayout::NativeOnInitialized()
+TSharedRef<SWidget> UNsUILayout::RebuildWidget()
 {
-    Super::NativeOnInitialized();
-
-    if (!WidgetTree)
+    if (WidgetTree == nullptr)
     {
-        return;
+        WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
     }
 
     RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
@@ -38,8 +32,12 @@ void UNsUILayout::NativeOnInitialized()
     if (CursorWidget)
     {
         CursorWidget->SetCursorBrush(CursorBrush);
-        RootOverlay->AddChildToOverlay(CursorWidget)->SetZOrder(3);
+
+        // This puts it above Game/Menu/Modal because it’s added last
+        RootOverlay->AddChildToOverlay(CursorWidget);
     }
+
+    return Super::RebuildWidget();
 }
 
 UNsUILayer* UNsUILayout::GetLayerWidget(ENsUILayer Layer) const
@@ -79,7 +77,11 @@ void UNsUILayout::BuildLayer(ENsUILayer Layer, int32 ZOrder)
     if (LayerWidget && RootOverlay)
     {
         LayerWidget->SetLayerType(Layer);
-        Layers.Add(Layer, LayerWidget);
-        RootOverlay->AddChildToOverlay(LayerWidget)->SetZOrder(ZOrder);
+        if (UOverlaySlot* const NewLayerSlot = RootOverlay->AddChildToOverlay(LayerWidget)) /**->SetZOrder(ZOrder)*/
+        {
+            NewLayerSlot->SetHorizontalAlignment(HAlign_Fill);
+            NewLayerSlot->SetVerticalAlignment(VAlign_Fill);
+            Layers.Add(Layer, LayerWidget);
+        }
     }
 }

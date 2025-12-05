@@ -25,9 +25,9 @@ void UNsUIWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointer
     }
 }
 
-void UNsUIWidget::NativeOnMouseLeave(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+void UNsUIWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
 {
-    Super::NativeOnMouseLeave(InGeometry, InMouseEvent);
+    Super::NativeOnMouseLeave(InMouseEvent);
 }
 
 UWidget* UNsUIWidget::GetInitialFocusWidget_Implementation() const

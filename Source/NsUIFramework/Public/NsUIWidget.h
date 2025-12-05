@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Blueprint/UserWidget.h"
 #include "NsUIWidget.generated.h"
@@ -13,7 +13,7 @@ public:
 
     virtual void NativeOnInitialized() override;
     virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-    virtual void NativeOnMouseLeave(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+    virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 
     UFUNCTION(BlueprintNativeEvent, Category = "NsUI")
     UWidget* GetInitialFocusWidget() const;

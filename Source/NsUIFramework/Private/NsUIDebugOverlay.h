@@ -2,7 +2,6 @@
 
 #include "NsUIFrameworkTypes.h"
 
-#if WITH_EDITOR
 
 #include "Blueprint/UserWidget.h"
 #include "NsUIDebugOverlay.generated.h"
@@ -30,5 +29,3 @@ private:
     void BuildEntries(const TArray<FNsUILayerSnapshot>& Snapshots);
     UVerticalBox* AddLayerColumn(const FString& Title);
 };
-
-#endif

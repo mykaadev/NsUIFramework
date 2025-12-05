@@ -16,7 +16,7 @@ class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
 public:
     UNsUILayout(const FObjectInitializer& ObjectInitializer);
 
-    virtual void NativeOnInitialized() override;
+    virtual TSharedRef<class SWidget> RebuildWidget() override;
 
     UNsUILayer* GetLayerWidget(ENsUILayer Layer) const;
     UNsUICursor* GetCursorWidget() const { return CursorWidget; }
