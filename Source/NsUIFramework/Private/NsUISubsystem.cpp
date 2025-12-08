@@ -1,5 +1,5 @@
-#include "CoreMinimal.h"
 #include "NsUISubsystem.h"
+#include "CoreMinimal.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
@@ -13,7 +13,6 @@
 #include "NsUILayer.h"
 #include "NsUILayout.h"
 #include "NsUIWidget.h"
-#include "Slate/SObjectWidget.h"
 #include "Widgets/SWidget.h"
 
 namespace
@@ -46,19 +45,14 @@ UNsUISubsystem* UNsUISubsystem::GetSubsystem()
         return nullptr;
     }
 
-    for (const FWorldContext& Context : GEngine->GetWorldContexts())
+    // Prefer the actual game viewport the user is looking at
+    if (const UGameViewportClient* Viewport = GEngine->GameViewport)
     {
-        if (const UWorld* World = Context.World())
+        if (const UGameInstance* GameInstance = Viewport->GetGameInstance())
         {
-            if (World->IsGameWorld() || World->IsPlayInEditor())
+            if (const ULocalPlayer* LocalPlayer = GameInstance->GetFirstGamePlayer())
             {
-                if (ULocalPlayer* LocalPlayer = World->GetFirstLocalPlayerFromController())
-                {
-                    if (UNsUISubsystem* Subsystem = LocalPlayer->GetSubsystem<UNsUISubsystem>())
-                    {
-                        return Subsystem;
-                    }
-                }
+                return LocalPlayer->GetSubsystem<UNsUISubsystem>();
             }
         }
     }
@@ -89,39 +83,78 @@ void UNsUISubsystem::Deinitialize()
 
 void UNsUISubsystem::EnsureLayout()
 {
-    if (ActiveLayout || !GetWorld())
+    const UWorld* const World = GetWorld();
+    if (World == nullptr)
     {
         return;
     }
 
     const ULocalPlayer* LocalPlayer = GetLocalPlayer();
-    if (!LocalPlayer)
+    if (LocalPlayer == nullptr)
     {
         return;
     }
 
-    TSubclassOf<UNsUILayout> LayoutClass = DefaultLayoutClass;
-    if (!LayoutClass)
+    // If the existing layout is for another world or is otherwise invalid, destroy it
+    if (ActiveLayout)
     {
-        LayoutClass = UNsUILayout::StaticClass();
+        const bool bWrongWorld = ActiveLayout->GetWorld() != World;
+
+        const bool bSlateInvalid = !ActiveLayout->GetCachedWidget().IsValid();
+
+        if (bWrongWorld || bSlateInvalid)
+        {
+            ActiveLayout->RemoveFromParent();
+            ActiveLayout = nullptr;
+            LayerStates.Empty();
+            CurrentFocus.Reset();
+            SlateToWidgetMap.Empty();
+        }
     }
 
-    ActiveLayout = CreateWidget<UNsUILayout>(LocalPlayer->GetPlayerController(LocalPlayer->GetWorld()), LayoutClass);
-
+    // (Re)create layout if needed
     if (!ActiveLayout)
     {
+        TSubclassOf<UNsUILayout> LayoutClass = DefaultLayoutClass;
+        if (!LayoutClass)
+        {
+            LayoutClass = UNsUILayout::StaticClass();
+        }
+
+        ActiveLayout = CreateWidget<UNsUILayout>(LocalPlayer->GetPlayerController(World), LayoutClass);
+
+        if (ActiveLayout == nullptr)
+        {
+            return;
+        }
+
+        ActiveLayout->AddToViewport();
+
+        LayerStates.Empty();
+        for (ENsUILayer Layer : { ENsUILayer::Game, ENsUILayer::Menu, ENsUILayer::Modal })
+        {
+            FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
+            State.LayerWidget = ActiveLayout->GetLayerWidget(Layer);
+        }
+
+        UpdateCursorVisibility();
         return;
     }
 
-    ActiveLayout->AddToViewport();
-
-    for (ENsUILayer Layer : {ENsUILayer::Game, ENsUILayer::Menu, ENsUILayer::Modal})
+    // Existing layout: make sure it is hooked into viewport and layers are bound
+    if (!ActiveLayout->IsInViewport())
     {
-        FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
-        State.LayerWidget = ActiveLayout->GetLayerWidget(Layer);
+        ActiveLayout->AddToViewport();
     }
 
-    UpdateCursorVisibility();
+    if (LayerStates.Num() == 0)
+    {
+        for (ENsUILayer Layer : { ENsUILayer::Game, ENsUILayer::Menu, ENsUILayer::Modal })
+        {
+            FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
+            State.LayerWidget = ActiveLayout->GetLayerWidget(Layer);
+        }
+    }
 }
 
 UNsUILayer* UNsUISubsystem::GetOrCreateLayerWidget(ENsUILayer Layer)

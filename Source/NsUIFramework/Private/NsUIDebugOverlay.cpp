@@ -6,6 +6,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -25,7 +26,9 @@ TSharedRef<SWidget> UNsUIDebugOverlay::RebuildWidget()
 
         if (RootOverlay && RootBox)
         {
-            RootOverlay->AddChildToOverlay(RootBox);
+            UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(RootBox);
+            OverlaySlot->SetHorizontalAlignment(HAlign_Center);
+            OverlaySlot->SetVerticalAlignment(VAlign_Center);
             WidgetTree->RootWidget = RootOverlay;
         }
     }

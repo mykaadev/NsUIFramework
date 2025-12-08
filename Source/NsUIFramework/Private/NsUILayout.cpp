@@ -1,11 +1,15 @@
 #include "NsUILayout.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "NsUICursor.h"
 #include "NsUILayer.h"
 #include "Styling/AppStyle.h"
+
+class UCanvasPanel;
 
 UNsUILayout::UNsUILayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -21,8 +25,43 @@ TSharedRef<SWidget> UNsUILayout::RebuildWidget()
         WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
     }
 
-    RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
-    WidgetTree->RootWidget = RootOverlay;
+    UWidget* ExistingRoot = WidgetTree->RootWidget;
+
+    UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(ExistingRoot);
+    if (!RootCanvas)
+    {
+        RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
+    }
+
+    RootOverlay = Cast<UOverlay>(ExistingRoot);
+    if (!RootOverlay)
+    {
+        RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
+    }
+
+    WidgetTree->RootWidget = RootCanvas;
+
+    // Preserve any designer-built root by nesting it inside our overlay so it stretches with the
+    // layout instead of being discarded when we rebuild programmatically.
+    if (ExistingRoot && ExistingRoot != RootCanvas && ExistingRoot != RootOverlay && RootOverlay->GetChildrenCount() == 0)
+    {
+        if (UOverlaySlot* const ExistingSlot = RootOverlay->AddChildToOverlay(ExistingRoot))
+        {
+            ExistingSlot->SetHorizontalAlignment(HAlign_Fill);
+            ExistingSlot->SetVerticalAlignment(VAlign_Fill);
+        }
+    }
+
+    if (RootOverlay->Slot == nullptr || RootOverlay->Slot->Parent != RootCanvas)
+    {
+        if (UCanvasPanelSlot* OverlaySlot = RootCanvas->AddChildToCanvas(RootOverlay))
+        {
+            OverlaySlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+            OverlaySlot->SetAlignment(FVector2D::ZeroVector);
+            OverlaySlot->SetOffsets(FMargin(0.f));
+            OverlaySlot->SetZOrder(0);
+        }
+    }
 
     BuildLayer(ENsUILayer::Game, 0);
     BuildLayer(ENsUILayer::Menu, 1);
@@ -62,7 +101,7 @@ void UNsUILayout::SetCursorVisibility(bool bVisible)
 {
     if (CursorWidget)
     {
-        CursorWidget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+        CursorWidget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Visible); // ESlateVisibility::Collapsed
     }
 }
 

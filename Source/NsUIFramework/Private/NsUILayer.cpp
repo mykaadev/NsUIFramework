@@ -30,10 +30,10 @@ TSharedRef<SWidget> UNsUILayer::RebuildWidget()
         RootPanel->SetVerticalAlignment(VAlign_Fill);
 
         // Kill the white background
-        //FSlateBrush Brush;
+        FSlateBrush Brush;
         //Brush.DrawAs = ESlateBrushDrawType::NoDrawType;
-        //Brush.TintColor = FSlateColor(FLinearColor::Transparent);
-        //RootPanel->SetBrush(Brush);
+        Brush.TintColor = FSlateColor(FLinearColor::Transparent); // FLinearColor::Transparent
+        RootPanel->SetBrush(Brush);
 
         RootPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
     }

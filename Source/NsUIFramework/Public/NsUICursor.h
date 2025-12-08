@@ -16,6 +16,7 @@ public:
 
     virtual TSharedRef<SWidget> RebuildWidget() override;
     virtual void SynchronizeProperties() override;
+    virtual void ReleaseSlateResources(bool bWholeView) override;
 
     /** Brush used to draw the cursor. A default arrow is applied in the constructor. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")

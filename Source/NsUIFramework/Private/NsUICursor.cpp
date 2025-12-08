@@ -29,6 +29,13 @@ void UNsUICursor::SynchronizeProperties()
     }
 }
 
+void UNsUICursor::ReleaseSlateResources(bool bWholeView)
+{
+    Super::ReleaseSlateResources(bWholeView);
+
+    MyImage.Reset();
+}
+
 void UNsUICursor::SetCursorBrush(const FSlateBrush& InBrush)
 {
     CursorBrush = InBrush;
