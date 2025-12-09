@@ -9,7 +9,6 @@
 #include "Components/OverlaySlot.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 
 UNsUIDebugOverlay::UNsUIDebugOverlay(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -28,7 +27,7 @@ TSharedRef<SWidget> UNsUIDebugOverlay::RebuildWidget()
         {
             UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(RootBox);
             OverlaySlot->SetHorizontalAlignment(HAlign_Center);
-            OverlaySlot->SetVerticalAlignment(VAlign_Center);
+            OverlaySlot->SetVerticalAlignment(VAlign_Top);
             WidgetTree->RootWidget = RootOverlay;
         }
     }
@@ -51,8 +50,9 @@ void UNsUIDebugOverlay::BuildEntries(const TArray<FNsUILayerSnapshot>& Snapshots
 {
     for (const FNsUILayerSnapshot& Snapshot : Snapshots)
     {
-        const FString Title = Snapshot.Layer == ENsUILayer::Game ? TEXT("Game Layer") :
-            (Snapshot.Layer == ENsUILayer::Menu ? TEXT("Menu Layer") : TEXT("Modal Layer"));
+        const FString Title = Snapshot.Layer == ENsUILayer::Game ? TEXT("Game Layer")
+                            : (Snapshot.Layer == ENsUILayer::Menu ? TEXT("Menu Layer")
+                            : TEXT("Modal Layer"));
 
         if (UVerticalBox* Column = AddLayerColumn(Title))
         {

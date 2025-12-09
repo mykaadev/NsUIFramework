@@ -4,10 +4,6 @@
 #include "Blueprint/UserWidget.h"
 #include "NsUILayout.generated.h"
 
-class UOverlay;
-class UNsUILayer;
-class UNsUICursor;
-
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILayout : public UUserWidget
 {
@@ -18,28 +14,41 @@ public:
 
     virtual TSharedRef<class SWidget> RebuildWidget() override;
 
-    UNsUILayer* GetLayerWidget(ENsUILayer Layer) const;
-    UNsUICursor* GetCursorWidget() const { return CursorWidget; }
+    class UNsUILayer* GetLayerWidget(ENsUILayer Layer) const;
+
+    class UNsUICursor* GetCursorWidget() const { return CursorWidget; }
+    FVector2D GetCursorAnchor() const { return CursorAnchor; }
+    FVector2D GetCursorWidgetSnapAnchor() const { return CursorWidgetSnapAnchor; }
+
 
     void UpdateCursorPosition(const FVector2D& ScreenPosition);
+    void SetCursorAnchor(const FVector2D& InAnchor);
     void SetCursorVisibility(bool bVisible);
+
+private:
+
+    void BuildLayer(ENsUILayer Layer, int32 ZOrder);
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "NsUI")
-    TSubclassOf<UNsUILayer> LayerClass;
+    TSubclassOf<class UNsUILayer> LayerClass;
 
     UPROPERTY(EditDefaultsOnly, Category = "NsUI")
     FSlateBrush CursorBrush;
 
 private:
     UPROPERTY()
-    TObjectPtr<UOverlay> RootOverlay;
+    TObjectPtr<class UOverlay> RootOverlay;
 
     UPROPERTY()
-    TMap<ENsUILayer, TObjectPtr<UNsUILayer>> Layers;
+    TMap<ENsUILayer, TObjectPtr<class UNsUILayer>> Layers;
 
     UPROPERTY()
-    TObjectPtr<UNsUICursor> CursorWidget;
+    TObjectPtr<class UNsUICursor> CursorWidget;
 
-    void BuildLayer(ENsUILayer Layer, int32 ZOrder);
+    UPROPERTY()
+    FVector2D CursorAnchor;
+
+    UPROPERTY()
+    FVector2D CursorWidgetSnapAnchor;
 };

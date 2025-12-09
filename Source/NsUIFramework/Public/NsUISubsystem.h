@@ -65,6 +65,7 @@ private:
     ENsUIInputSource LastInputSource;
     TWeakObjectPtr<UWidget> CurrentFocus;
     FDelegateHandle FocusChangedHandle;
+    FDelegateHandle SlatePreTickHandle;
 
     /** Maps focused Slate widgets back to their owning UWidget */
     TMap<TWeakPtr<SWidget>, TWeakObjectPtr<UWidget>> SlateToWidgetMap;
@@ -92,6 +93,7 @@ private:
 
     void UpdateCursorToFocusedWidget();
     void UpdateCursorVisibility();
+    void SyncHoverFocusWithSlate(float InDeltaTime);
 
 #if WITH_EDITOR
     void RefreshDebugOverlay();

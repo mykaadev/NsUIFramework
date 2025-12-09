@@ -67,6 +67,7 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
     if (FSlateApplication::IsInitialized())
     {
         FocusChangedHandle = FSlateApplication::Get().OnFocusChanging().AddUObject(this, &UNsUISubsystem::HandleFocusChanged);
+        SlatePreTickHandle = FSlateApplication::Get().OnPreTick().AddUObject(this, &UNsUISubsystem::SyncHoverFocusWithSlate);
     }
 }
 
@@ -76,6 +77,12 @@ void UNsUISubsystem::Deinitialize()
     {
         FSlateApplication::Get().OnFocusChanging().Remove(FocusChangedHandle);
         FocusChangedHandle.Reset();
+    }
+
+    if (FSlateApplication::IsInitialized() && SlatePreTickHandle.IsValid())
+    {
+        FSlateApplication::Get().OnPreTick().Remove(SlatePreTickHandle);
+        SlatePreTickHandle.Reset();
     }
 
     Super::Deinitialize();
@@ -576,6 +583,12 @@ UWidget* UNsUISubsystem::ResolveWidgetFromSlate(const FWidgetPath& NewPath, cons
 
 void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)
 {
+    if (InFocusEvent.GetCause() == EFocusCause::Mouse)
+    {
+        LastInputSource = ENsUIInputSource::Mouse;
+        UpdateCursorVisibility();
+    }
+
     UWidget* NewFocusedWidget = ResolveWidgetFromSlate(InNewPath, InNewWidget);
 
     if (IsValid(NewFocusedWidget))
@@ -588,6 +601,39 @@ void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const F
         // Focus moved somewhere outside our tracked UMG widgets
         UE_LOG(LogTemp, Warning, TEXT("HandleFocusChanged: Invalid widget object returned from SObjectWidget."));
         CurrentFocus.Reset();
+    }
+}
+
+void UNsUISubsystem::SyncHoverFocusWithSlate(float InDeltaTime)
+{
+    if (LastInputSource != ENsUIInputSource::Mouse || !FSlateApplication::IsInitialized())
+    {
+        return;
+    }
+
+    FSlateApplication& SlateApp = FSlateApplication::Get();
+    const FWidgetPath HoveredPath = SlateApp.LocateWindowUnderMouse(SlateApp.GetCursorPos(), SlateApp.GetInteractiveTopLevelWindows());
+
+    if (!HoveredPath.IsValid())
+    {
+        return;
+    }
+
+    for (int32 Index = HoveredPath.Widgets.Num() - 1; Index >= 0; --Index)
+    {
+        const TSharedRef<SWidget>& HoveredSlateWidget = HoveredPath.Widgets[Index].Widget;
+
+        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(HoveredSlateWidget))
+        {
+            UWidget* const HoveredWidget = Found->Get();
+
+            if (HoveredWidget && HoveredWidget != CurrentFocus && IsWidgetFocusable(HoveredWidget) && HoveredWidget->IsVisible())
+            {
+                UpdateFocus(HoveredWidget, EFocusCause::Mouse);
+            }
+
+            break;
+        }
     }
 }
 
@@ -616,18 +662,20 @@ void UNsUISubsystem::RegisterWidgetTree(UUserWidget* Root)
 
 FVector2D UNsUISubsystem::GetWidgetScreenPosition(UWidget* Widget) const
 {
-    if (!Widget || !GetWorld())
+    if (Widget == nullptr || GetWorld() == nullptr || ActiveLayout == nullptr)
     {
         return FVector2D::ZeroVector;
     }
 
     const FGeometry& Geometry = Widget->GetCachedGeometry();
-    const FVector2D Absolute = Geometry.GetAbsolutePosition() + (Geometry.GetAbsoluteSize() * 0.5f);
 
-    FVector2D ScreenPosition;
-    FVector2D ViewportPosition;
-    USlateBlueprintLibrary::AbsoluteToViewport(GetWorld(), Absolute, ScreenPosition, ViewportPosition);
-    return ScreenPosition;
+    // Pick a point inside the widget using the anchor
+    const FVector2D Absolute = Geometry.GetAbsolutePosition() + (Geometry.GetAbsoluteSize() * ActiveLayout->GetCursorWidgetSnapAnchor());
+
+    FVector2D PixelPosition;
+    FVector2D InOutViewportPosition;
+    USlateBlueprintLibrary::AbsoluteToViewport(GetWorld(), Absolute, PixelPosition, InOutViewportPosition);
+    return InOutViewportPosition;
 }
 
 ENsUILayer UNsUISubsystem::GetTopActiveLayer() const

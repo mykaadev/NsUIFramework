@@ -13,6 +13,8 @@ class UCanvasPanel;
 
 UNsUILayout::UNsUILayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
+    , CursorAnchor(FVector2D(1.0f, 0.5f))
+    , CursorWidgetSnapAnchor(FVector2D(0.0f, 0.5f))
 {
     LayerClass = UNsUILayer::StaticClass();
     CursorBrush = *FAppStyle::Get().GetBrush("Icons.ChevronRight");
@@ -93,8 +95,17 @@ void UNsUILayout::UpdateCursorPosition(const FVector2D& ScreenPosition)
 {
     if (CursorWidget)
     {
-        CursorWidget->SetRenderTranslation(ScreenPosition);
+        const FVector2D Size = CursorWidget->GetDesiredSize();
+        const FVector2D Offset = Size * CursorAnchor;
+
+        CursorWidget->SetRenderTranslation(ScreenPosition - Offset);
     }
+}
+
+void UNsUILayout::SetCursorAnchor(const FVector2D& InAnchor)
+{
+    CursorAnchor.X = FMath::Clamp(InAnchor.X, 0.f, 1.f);
+    CursorAnchor.Y = FMath::Clamp(InAnchor.Y, 0.f, 1.f);
 }
 
 void UNsUILayout::SetCursorVisibility(bool bVisible)
