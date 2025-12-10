@@ -20,8 +20,10 @@
 
 namespace
 {
+// Slate treats user index 0 as the default keyboard/gamepad user; keep constant local for clarity.
 constexpr int32 KeyboardUserIndex = 0;
 
+// Helper for checking if a UWidget resolves to a Slate widget that supports keyboard focus.
 bool IsWidgetFocusable(UWidget* Widget)
 {
     if (!Widget)
