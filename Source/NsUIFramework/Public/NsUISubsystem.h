@@ -4,6 +4,7 @@
 #include "NsUIFrameworkTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "Templates/SharedPointer.h"
+#include "Tickable.h"
 #include "UObject/SoftObjectPtr.h"
 #include "NsUISubsystem.generated.h"
 
@@ -17,7 +18,7 @@ class SWidget;
 class UNsUISelectionBehavior;
 
 UCLASS()
-class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem
+class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem, public FTickableGameObject
 {
     GENERATED_BODY()
 
@@ -45,6 +46,7 @@ public:
 
     virtual void Tick(float DeltaTime) override;
     virtual TStatId GetStatId() const override;
+    virtual UWorld* GetTickableGameObjectWorld() const override { return GetWorld(); }
 
     void SetSelectionBehavior(UNsUISelectionBehavior* NewBehavior);
     void BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
