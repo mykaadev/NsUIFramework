@@ -10,7 +10,7 @@ UNsUILayer::UNsUILayer(const FObjectInitializer& ObjectInitializer)
     , RootPanel(nullptr)
     , Layer(ENsUILayer::Game)
 {
-    bIsFocusable = false;
+    SetIsFocusable(false);
 }
 
 TSharedRef<SWidget> UNsUILayer::RebuildWidget()

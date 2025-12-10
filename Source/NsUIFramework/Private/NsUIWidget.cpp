@@ -7,7 +7,7 @@ UNsUIWidget::UNsUIWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
     , bFocusOnHover(true)
 {
-    bIsFocusable = true;
+    SetIsFocusable(true);
 }
 
 void UNsUIWidget::NativeOnInitialized()
