@@ -41,7 +41,7 @@ enum class ENsUIInputSource : uint8
     Mouse
 };
 
-UENUM()
+UENUM(BlueprintType)
 enum class ENsUIFocusKind : uint8
 {
     None,
@@ -50,27 +50,27 @@ enum class ENsUIFocusKind : uint8
     Location
 };
 
-USTRUCT()
+USTRUCT(BlueprintType)
 struct FNsUIFocusTarget
 {
     GENERATED_BODY()
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
     ENsUIFocusKind Kind = ENsUIFocusKind::None;
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
     TWeakObjectPtr<UWidget> Widget;
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
     TWeakObjectPtr<AActor> Actor;
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
     FVector WorldLocation = FVector::ZeroVector;
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
     FVector2D ScreenPosition = FVector2D::ZeroVector;
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
     FName DebugName = NAME_None;
 
     bool IsValid() const

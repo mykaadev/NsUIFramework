@@ -1,6 +1,7 @@
 #include "NsUILibrary.h"
 
 #include "NsUISubsystem.h"
+#include "NsUISelectionBehavior.h"
 #include "Engine/AssetManager.h"
 
 UUserWidget* UNsUILibrary::Push(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer)
@@ -55,5 +56,45 @@ void UNsUILibrary::ToggleDebugOverlay()
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
         Subsystem->ToggleDebugOverlay();
+    }
+}
+
+void UNsUILibrary::SetSelectionBehavior(UNsUISelectionBehavior* Behavior)
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        Subsystem->SetSelectionBehavior(Behavior);
+    }
+}
+
+void UNsUILibrary::BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations)
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        Subsystem->BeginSelectionSession(Behavior, Actors, Locations);
+    }
+}
+
+void UNsUILibrary::EndSelectionSession()
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        Subsystem->EndSelectionSession();
+    }
+}
+
+void UNsUILibrary::FocusNextTarget()
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        Subsystem->FocusNextTarget();
+    }
+}
+
+void UNsUILibrary::FocusPreviousTarget()
+{
+    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
+    {
+        Subsystem->FocusPreviousTarget();
     }
 }
