@@ -8,11 +8,14 @@
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
 #include "InputCoreTypes.h"
+#include "Kismet/GameplayStatics.h"
 #include "Math/NumericLimits.h"
 #include "NsUIDebugOverlay.h"
 #include "NsUILayer.h"
 #include "NsUILayout.h"
+#include "NsUISelectionBehavior.h"
 #include "NsUIWidget.h"
+#include "Stats/Stats.h"
 #include "Widgets/SWidget.h"
 
 namespace
@@ -114,7 +117,9 @@ void UNsUISubsystem::EnsureLayout()
             ActiveLayout->RemoveFromParent();
             ActiveLayout = nullptr;
             LayerStates.Empty();
-            CurrentFocus.Reset();
+            CurrentFocus = FNsUIFocusTarget{};
+            FocusTargets.Reset();
+            FocusIndex = INDEX_NONE;
             SlateToWidgetMap.Empty();
         }
     }
@@ -202,9 +207,9 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenCl
     }
 
     FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
-    if (CurrentFocus.IsValid() && CurrentFocus->IsChildOf(LayerWidget))
+    if (CurrentFocus.Kind == ENsUIFocusKind::Widget && CurrentFocus.Widget.IsValid() && CurrentFocus.Widget->IsChildOf(LayerWidget))
     {
-        State.FocusHistory.Add(CurrentFocus);
+        State.FocusHistory.Add(CurrentFocus.Widget);
     }
     else
     {
@@ -301,10 +306,10 @@ void UNsUISubsystem::PopAllWidgetsFromLayer(ENsUILayer Layer)
     State->Stack.Reset();
     State->FocusHistory.Reset();
 
-    if (CurrentFocus.IsValid() && State->LayerWidget.IsValid() && CurrentFocus->IsChildOf(State->LayerWidget.Get()))
+    if (CurrentFocus.Kind == ENsUIFocusKind::Widget && CurrentFocus.Widget.IsValid() && State->LayerWidget.IsValid() && CurrentFocus.Widget->IsChildOf(State->LayerWidget.Get()))
     {
-        CurrentFocus.Reset();
-        UpdateCursorToFocusedWidget();
+        CurrentFocus = FNsUIFocusTarget{};
+        UpdateCursorToCurrentFocus();
     }
 
     UpdateCursorVisibility();
@@ -362,6 +367,13 @@ void UNsUISubsystem::Confirm()
 {
     LastInputSource = ENsUIInputSource::KeyboardGamepad;
     UpdateCursorVisibility();
+
+    if (ActiveBehavior && CurrentFocus.IsValid())
+    {
+        ActiveBehavior->OnConfirm(CurrentFocus);
+        return;
+    }
+
     SendKeyThroughSlate(EKeys::Enter);
 }
 
@@ -369,7 +381,141 @@ void UNsUISubsystem::Cancel()
 {
     LastInputSource = ENsUIInputSource::KeyboardGamepad;
     UpdateCursorVisibility();
+
+    if (ActiveBehavior)
+    {
+        ActiveBehavior->OnCancel();
+        return;
+    }
+
     SendKeyThroughSlate(EKeys::Escape);
+}
+
+void UNsUISubsystem::Tick(float DeltaTime)
+{
+    if (ActiveBehavior)
+    {
+        ActiveBehavior->OnTick(DeltaTime);
+    }
+
+    if (CurrentFocus.Kind == ENsUIFocusKind::Actor || CurrentFocus.Kind == ENsUIFocusKind::Location)
+    {
+        UpdateCursorToCurrentFocus();
+    }
+}
+
+TStatId UNsUISubsystem::GetStatId() const
+{
+    RETURN_QUICK_DECLARE_CYCLE_STAT(UNsUISubsystem, STATGROUP_Tickables);
+}
+
+void UNsUISubsystem::SetSelectionBehavior(UNsUISelectionBehavior* NewBehavior)
+{
+    if (ActiveBehavior == NewBehavior)
+    {
+        return;
+    }
+
+    if (ActiveBehavior)
+    {
+        ActiveBehavior->OnExit();
+    }
+
+    ActiveBehavior = NewBehavior;
+
+    if (ActiveBehavior)
+    {
+        ActiveBehavior->OnEnter();
+
+        if (CurrentFocus.IsValid())
+        {
+            ActiveBehavior->OnHover(CurrentFocus);
+        }
+    }
+}
+
+void UNsUISubsystem::BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations)
+{
+    SetSelectionBehavior(Behavior);
+
+    FocusTargets.Reset();
+    FocusIndex = INDEX_NONE;
+
+    for (AActor* Actor : Actors)
+    {
+        if (!Actor)
+        {
+            continue;
+        }
+
+        FNsUIFocusTarget Target;
+        Target.Kind = ENsUIFocusKind::Actor;
+        Target.Actor = Actor;
+        Target.DebugName = Actor->GetFName();
+        FocusTargets.Add(Target);
+    }
+
+    for (const FVector& Location : Locations)
+    {
+        FNsUIFocusTarget Target;
+        Target.Kind = ENsUIFocusKind::Location;
+        Target.WorldLocation = Location;
+        FocusTargets.Add(Target);
+    }
+
+    if (FocusTargets.Num() > 0)
+    {
+        FocusIndex = 0;
+        CurrentFocus = FocusTargets[0];
+        UpdateCursorToCurrentFocus();
+
+        if (ActiveBehavior)
+        {
+            ActiveBehavior->OnHover(CurrentFocus);
+        }
+    }
+}
+
+void UNsUISubsystem::EndSelectionSession()
+{
+    FocusTargets.Reset();
+    FocusIndex = INDEX_NONE;
+    CurrentFocus = FNsUIFocusTarget{};
+    SetSelectionBehavior(nullptr);
+}
+
+void UNsUISubsystem::FocusNextTarget()
+{
+    if (FocusTargets.Num() == 0)
+    {
+        return;
+    }
+
+    FocusIndex = (FocusIndex + 1) % FocusTargets.Num();
+    CurrentFocus = FocusTargets[FocusIndex];
+    NotifyFocusChanged();
+}
+
+void UNsUISubsystem::FocusPreviousTarget()
+{
+    if (FocusTargets.Num() == 0)
+    {
+        return;
+    }
+
+    FocusIndex = (FocusIndex - 1 + FocusTargets.Num()) % FocusTargets.Num();
+    CurrentFocus = FocusTargets[FocusIndex];
+    NotifyFocusChanged();
+}
+
+void UNsUISubsystem::NotifyFocusChanged()
+{
+    UpdateCursorToCurrentFocus();
+
+    if (ActiveBehavior && CurrentFocus.IsValid())
+    {
+        ActiveBehavior->OnHover(CurrentFocus);
+    }
 }
 
 void UNsUISubsystem::ToggleDebugOverlay()
@@ -440,8 +586,11 @@ void UNsUISubsystem::UpdateFocus(UWidget* Widget, EFocusCause FocusCause)
         }
     }
 
-    CurrentFocus = Widget;
-    UpdateCursorToFocusedWidget();
+    CurrentFocus.Kind = ENsUIFocusKind::Widget;
+    CurrentFocus.Widget = Widget;
+    CurrentFocus.Actor = nullptr;
+    CurrentFocus.WorldLocation = FVector::ZeroVector;
+    NotifyFocusChanged();
 }
 
 UWidget* UNsUISubsystem::ResolveInitialFocus(UUserWidget* Screen) const
@@ -527,8 +676,8 @@ void UNsUISubsystem::RestoreFocusForLayer(ENsUILayer Layer)
         }
     }
 
-    CurrentFocus.Reset();
-    UpdateCursorToFocusedWidget();
+    CurrentFocus = FNsUIFocusTarget{};
+    UpdateCursorToCurrentFocus();
 }
 
 void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState)
@@ -593,14 +742,18 @@ void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const F
 
     if (IsValid(NewFocusedWidget))
     {
-        CurrentFocus = NewFocusedWidget;
-        UpdateCursorToFocusedWidget();
+        CurrentFocus.Kind = ENsUIFocusKind::Widget;
+        CurrentFocus.Widget = NewFocusedWidget;
+        CurrentFocus.Actor = nullptr;
+        CurrentFocus.WorldLocation = FVector::ZeroVector;
+        NotifyFocusChanged();
     }
     else
     {
         // Focus moved somewhere outside our tracked UMG widgets
         UE_LOG(LogTemp, Warning, TEXT("HandleFocusChanged: Invalid widget object returned from SObjectWidget."));
-        CurrentFocus.Reset();
+        CurrentFocus = FNsUIFocusTarget{};
+        UpdateCursorToCurrentFocus();
     }
 }
 
@@ -627,7 +780,7 @@ void UNsUISubsystem::SyncHoverFocusWithSlate(float InDeltaTime)
         {
             UWidget* const HoveredWidget = Found->Get();
 
-            if (HoveredWidget && HoveredWidget != CurrentFocus && IsWidgetFocusable(HoveredWidget) && HoveredWidget->IsVisible())
+            if (HoveredWidget && HoveredWidget != CurrentFocus.Widget.Get() && IsWidgetFocusable(HoveredWidget) && HoveredWidget->IsVisible())
             {
                 UpdateFocus(HoveredWidget, EFocusCause::Mouse);
             }
@@ -678,6 +831,55 @@ FVector2D UNsUISubsystem::GetWidgetScreenPosition(UWidget* Widget) const
     return InOutViewportPosition;
 }
 
+FVector2D UNsUISubsystem::GetActorScreenPosition(AActor* Actor) const
+{
+    if (!Actor || !GetWorld())
+    {
+        return FVector2D::ZeroVector;
+    }
+
+    ULocalPlayer* LP = GetLocalPlayer();
+    APlayerController* PC = LP ? LP->GetPlayerController(GetWorld()) : nullptr;
+    if (!PC)
+    {
+        return FVector2D::ZeroVector;
+    }
+
+    const FBox Bounds = Actor->GetComponentsBoundingBox(true);
+    const FVector WorldCenter = Bounds.IsValid ? Bounds.GetCenter() : Actor->GetActorLocation();
+
+    FVector2D Screen;
+    if (UGameplayStatics::ProjectWorldToScreen(PC, WorldCenter, Screen))
+    {
+        return Screen;
+    }
+
+    return FVector2D::ZeroVector;
+}
+
+FVector2D UNsUISubsystem::GetLocationScreenPosition(const FVector& WorldLocation) const
+{
+    if (!GetWorld())
+    {
+        return FVector2D::ZeroVector;
+    }
+
+    ULocalPlayer* LP = GetLocalPlayer();
+    APlayerController* PC = LP ? LP->GetPlayerController(GetWorld()) : nullptr;
+    if (!PC)
+    {
+        return FVector2D::ZeroVector;
+    }
+
+    FVector2D Screen;
+    if (UGameplayStatics::ProjectWorldToScreen(PC, WorldLocation, Screen))
+    {
+        return Screen;
+    }
+
+    return FVector2D::ZeroVector;
+}
+
 ENsUILayer UNsUISubsystem::GetTopActiveLayer() const
 {
     const TArray<ENsUILayer> Priority = {ENsUILayer::Modal, ENsUILayer::Menu, ENsUILayer::Game};
@@ -712,11 +914,11 @@ void UNsUISubsystem::MoveFocusWithFallback(EUINavigation Direction)
 {
     ENsUILayer ActiveLayer = GetTopActiveLayer();
 
-    if (CurrentFocus.IsValid())
+    if (CurrentFocus.Kind == ENsUIFocusKind::Widget && CurrentFocus.Widget.IsValid())
     {
         for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
         {
-            if (Pair.Value.LayerWidget.IsValid() && CurrentFocus->IsChildOf(Pair.Value.LayerWidget.Get()))
+            if (Pair.Value.LayerWidget.IsValid() && CurrentFocus.Widget->IsChildOf(Pair.Value.LayerWidget.Get()))
             {
                 ActiveLayer = Pair.Key;
                 break;
@@ -730,7 +932,7 @@ void UNsUISubsystem::MoveFocusWithFallback(EUINavigation Direction)
         return;
     }
 
-    UWidget* Origin = CurrentFocus.IsValid() ? CurrentFocus.Get() : FindFirstFocusable(Screen);
+    UWidget* Origin = CurrentFocus.Kind == ENsUIFocusKind::Widget ? CurrentFocus.Widget.Get() : FindFirstFocusable(Screen);
     if (!Origin)
     {
         return;
@@ -809,14 +1011,40 @@ UWidget* UNsUISubsystem::FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origi
     return BestCandidate;
 }
 
-void UNsUISubsystem::UpdateCursorToFocusedWidget()
+void UNsUISubsystem::UpdateCursorToCurrentFocus()
 {
     if (!ActiveLayout || !CurrentFocus.IsValid())
     {
         return;
     }
 
-    const FVector2D ScreenPosition = GetWidgetScreenPosition(CurrentFocus.Get());
+    FVector2D ScreenPosition = FVector2D::ZeroVector;
+
+    switch (CurrentFocus.Kind)
+    {
+    case ENsUIFocusKind::Widget:
+        if (UWidget* Widget = CurrentFocus.Widget.Get())
+        {
+            ScreenPosition = GetWidgetScreenPosition(Widget);
+        }
+        break;
+
+    case ENsUIFocusKind::Actor:
+        if (AActor* Actor = CurrentFocus.Actor.Get())
+        {
+            ScreenPosition = GetActorScreenPosition(Actor);
+        }
+        break;
+
+    case ENsUIFocusKind::Location:
+        ScreenPosition = GetLocationScreenPosition(CurrentFocus.WorldLocation);
+        break;
+
+    default:
+        return;
+    }
+
+    CurrentFocus.ScreenPosition = ScreenPosition;
     ActiveLayout->UpdateCursorPosition(ScreenPosition);
 }
 
@@ -853,7 +1081,7 @@ void UNsUISubsystem::RefreshDebugOverlay()
         {
             if (UUserWidget* Widget = Stack[Index].Get())
             {
-                if (CurrentFocus.IsValid() && CurrentFocus->IsChildOf(Widget))
+                if (CurrentFocus.Kind == ENsUIFocusKind::Widget && CurrentFocus.Widget.IsValid() && CurrentFocus.Widget->IsChildOf(Widget))
                 {
                     Snapshot.FocusedIndex = Index;
                     break;

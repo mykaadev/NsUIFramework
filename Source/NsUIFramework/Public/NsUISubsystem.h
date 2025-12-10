@@ -14,6 +14,7 @@ class UNsUIWidget;
 class UUserWidget;
 class UWidget;
 class SWidget;
+class UNsUISelectionBehavior;
 
 UCLASS()
 class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem
@@ -39,8 +40,18 @@ public:
 
     void ToggleDebugOverlay();
 
-    UWidget* GetCurrentFocusedWidget() const { return CurrentFocus.Get(); }
+    UWidget* GetCurrentFocusedWidget() const { return CurrentFocus.Widget.Get(); }
     void HandleHoverFocus(UWidget* Widget);
+
+    virtual void Tick(float DeltaTime) override;
+    virtual TStatId GetStatId() const override;
+
+    void SetSelectionBehavior(UNsUISelectionBehavior* NewBehavior);
+    void BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
+    void EndSelectionSession();
+    void FocusNextTarget();
+    void FocusPreviousTarget();
+    void NotifyFocusChanged();
 
 private:
     struct FNsUILayerState
@@ -63,12 +74,17 @@ private:
 
     TMap<ENsUILayer, FNsUILayerState> LayerStates;
     ENsUIInputSource LastInputSource;
-    TWeakObjectPtr<UWidget> CurrentFocus;
+    FNsUIFocusTarget CurrentFocus;
+    TArray<FNsUIFocusTarget> FocusTargets;
+    int32 FocusIndex = INDEX_NONE;
     FDelegateHandle FocusChangedHandle;
     FDelegateHandle SlatePreTickHandle;
 
     /** Maps focused Slate widgets back to their owning UWidget */
     TMap<TWeakPtr<SWidget>, TWeakObjectPtr<UWidget>> SlateToWidgetMap;
+
+    UPROPERTY()
+    TObjectPtr<UNsUISelectionBehavior> ActiveBehavior;
 
     void EnsureLayout();
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);
@@ -86,12 +102,14 @@ private:
     void RegisterWidgetTree(UUserWidget* Root);
 
     FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
+    FVector2D GetActorScreenPosition(AActor* Actor) const;
+    FVector2D GetLocationScreenPosition(const FVector& WorldLocation) const;
     ENsUILayer GetTopActiveLayer() const;
     UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
     void MoveFocusWithFallback(EUINavigation Direction);
     UWidget* FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origin, EUINavigation Direction) const;
 
-    void UpdateCursorToFocusedWidget();
+    void UpdateCursorToCurrentFocus();
     void UpdateCursorVisibility();
     void SyncHoverFocusWithSlate(float InDeltaTime);
 
