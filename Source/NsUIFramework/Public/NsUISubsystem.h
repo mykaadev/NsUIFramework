@@ -51,6 +51,9 @@ public:
     /** Trigger cancel/back on the current behavior or focused widget. */
     void Cancel();
 
+    /** Returns true when NsUI is currently controlling focus/navigation (layout or selection session active). */
+    bool IsFrameworkActive() const;
+
     void ToggleDebugOverlay();
 
     /** Convenience getter for widget focus (returns null for actor/location focus kinds). */

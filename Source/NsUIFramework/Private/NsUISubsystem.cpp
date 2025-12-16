@@ -6,6 +6,7 @@
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "Framework/Application/NavigationConfig.h"
 #include "Framework/Application/SlateApplication.h"
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
@@ -20,8 +21,53 @@
 
 namespace
 {
-// Slate treats user index 0 as the default keyboard/gamepad user; keep constant local for clarity.
-constexpr int32 KeyboardUserIndex = 0;
+    TSharedPtr<FNavigationConfig> GOriginalNavigationConfig;
+
+    /** Custom navigation config that can route nav events into UNsUISubsystem when active. */
+    class FNsUINavigationConfig : public FNavigationConfig
+    {
+    public:
+        FNsUINavigationConfig(
+            TWeakObjectPtr<UNsUISubsystem> InSubsystem,
+            const TSharedRef<FNavigationConfig>& InWrappedConfig)
+            : Subsystem(InSubsystem)
+            , WrappedConfig(InWrappedConfig)
+        {
+            // Start with the same settings as the wrapped config (key mappings, flags, etc.)
+            *static_cast<FNavigationConfig*>(this) = *InWrappedConfig;
+        }
+
+        virtual EUINavigation GetNavigationDirectionFromKey(const FKeyEvent& InKeyEvent) const override
+        {
+            const EUINavigation Direction = WrappedConfig->GetNavigationDirectionFromKey(InKeyEvent);
+
+            UNsUISubsystem* Sys = Subsystem.Get();
+            if (!Sys || !Sys->IsFrameworkActive())
+            {
+                // Framework inactive → behave exactly like the original config.
+                return Direction;
+            }
+
+            if (Direction != EUINavigation::Invalid)
+            {
+                Sys->Navigate(Direction);
+                // Returning Invalid here tells Slate "we handled the nav; don't do built-in focus move".
+                return EUINavigation::Invalid;
+            }
+
+            return EUINavigation::Invalid;
+        }
+
+        // NOTE: For now we do NOT override GetNavigationActionFromKey.
+        // Confirm/Cancel will still be driven by your own input mappings calling UNsUISubsystem::Confirm/Cancel.
+
+    private:
+        TWeakObjectPtr<UNsUISubsystem> Subsystem;
+        TSharedRef<FNavigationConfig> WrappedConfig;
+    };
+
+    // Slate treats user index 0 as the default keyboard/gamepad user; keep constant local for clarity.
+    constexpr int32 KeyboardUserIndex = 0;
 
 // Helper for checking if a UWidget resolves to a Slate widget that supports keyboard focus.
 bool IsWidgetFocusable(UWidget* Widget)
@@ -73,6 +119,16 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
     {
         FocusChangedHandle = FSlateApplication::Get().OnFocusChanging().AddUObject(this, &UNsUISubsystem::HandleFocusChanged);
         SlatePreTickHandle = FSlateApplication::Get().OnPreTick().AddUObject(this, &UNsUISubsystem::SyncHoverFocusWithSlate);
+
+        if (!GOriginalNavigationConfig.IsValid())
+        {
+            GOriginalNavigationConfig = FSlateApplication::Get().GetNavigationConfig();
+
+            const TSharedRef<FNavigationConfig> WrappedRef = GOriginalNavigationConfig.ToSharedRef();
+            const TSharedRef<FNavigationConfig> NsConfig = MakeShared<FNsUINavigationConfig>(this, WrappedRef);
+
+            FSlateApplication::Get().SetNavigationConfig(NsConfig);
+        }
     }
 }
 
@@ -88,6 +144,12 @@ void UNsUISubsystem::Deinitialize()
     {
         FSlateApplication::Get().OnPreTick().Remove(SlatePreTickHandle);
         SlatePreTickHandle.Reset();
+    }
+
+    if (FSlateApplication::IsInitialized() && GOriginalNavigationConfig.IsValid())
+    {
+        FSlateApplication::Get().SetNavigationConfig(GOriginalNavigationConfig.ToSharedRef());
+        GOriginalNavigationConfig.Reset();
     }
 
     Super::Deinitialize();
@@ -326,40 +388,27 @@ void UNsUISubsystem::Navigate(EUINavigation Direction)
     LastInputSource = ENsUIInputSource::KeyboardGamepad;
     UpdateCursorVisibility();
 
-    FKey NavKey;
-    switch (Direction)
-    {
-    case EUINavigation::Up:
-        NavKey = EKeys::Up;
-        break;
-    case EUINavigation::Down:
-        NavKey = EKeys::Down;
-        break;
-    case EUINavigation::Left:
-        NavKey = EKeys::Left;
-        break;
-    case EUINavigation::Right:
-        NavKey = EKeys::Right;
-        break;
-    case EUINavigation::Next:
-        NavKey = EKeys::Tab;
-        break;
-    case EUINavigation::Previous:
-        break;
-    default:
-        break;
-    }
+    const bool bHasSelectionTargets = FocusTargets.Num() > 0;
 
-    TWeakPtr<SWidget> PreviousFocus = GetSlateFocus();
-
-    if (NavKey.IsValid())
+    if (ActiveBehavior && bHasSelectionTargets)
     {
-        SendKeyThroughSlate(NavKey);
-    }
+        switch (Direction)
+        {
+        case EUINavigation::Right:
+        case EUINavigation::Down:
+        case EUINavigation::Next:
+            FocusNextTarget();
+            return;
 
-    if (PreviousFocus != GetSlateFocus())
-    {
-        return;
+        case EUINavigation::Left:
+        case EUINavigation::Up:
+        case EUINavigation::Previous:
+            FocusPreviousTarget();
+            return;
+
+        default:
+            break;
+        }
     }
 
     MoveFocusWithFallback(Direction);
@@ -404,6 +453,30 @@ void UNsUISubsystem::Tick(float DeltaTime)
     {
         UpdateCursorToCurrentFocus();
     }
+}
+
+bool UNsUISubsystem::IsFrameworkActive() const
+{
+    if (ActiveBehavior != nullptr)
+    {
+        return true;
+    }
+
+    if (!ActiveLayout)
+    {
+        return false;
+    }
+
+    for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
+    {
+        const TArray<TWeakObjectPtr<UUserWidget>>& Stack = Pair.Value.Stack;
+        if (Stack.Num() > 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 TStatId UNsUISubsystem::GetStatId() const
