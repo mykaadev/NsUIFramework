@@ -18,7 +18,8 @@ Blueprints expose the same calls via **NsUI** → `Push` (hard or soft class), w
 ### Navigation and Input
 - `Navigate` routes through the active navigation behaviour (UMG, actors, world locations, or anything custom).
 - `Confirm` and `Cancel` first hit the active behaviour; if none is set, they forward to Slate (Enter/Escape).
-- The subsystem installs a Slate navigation wrapper so arrows only route through NsUI when the framework is active.
+- The subsystem installs a Slate navigation wrapper so arrows/Tab (directional + Next/Previous) and Enter/Escape (Accept/Back)
+  route through NsUI when the framework is active, and otherwise fall back to default UMG.
 
 ### Cursor Sync
 - UMG focus changes call `UpdateCursorToWidget` so the retro cursor follows the focused widget.

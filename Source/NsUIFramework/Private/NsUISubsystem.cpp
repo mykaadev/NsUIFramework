@@ -60,8 +60,35 @@ namespace
             return EUINavigation::Invalid;
         }
 
-        // NOTE: For now we do NOT override GetNavigationActionFromKey.
-        // Confirm/Cancel will still be driven by your own input mappings calling UNsUISubsystem::Confirm/Cancel.
+        // NOTE: Navigation actions (Accept/Back) are forwarded into the subsystem as well so Confirm/Cancel
+        // follow the same routing rules as directional navigation when NsUI is active.
+
+        virtual EUINavigationAction GetNavigationActionFromKey(const FKeyEvent& InKeyEvent) const override
+        {
+            const EUINavigationAction Action = WrappedConfig->GetNavigationActionFromKey(InKeyEvent);
+
+            UNsUISubsystem* Sys = Subsystem.Get();
+            if (!Sys || !Sys->IsFrameworkActive())
+            {
+                return Action;
+            }
+
+            switch (Action)
+            {
+            case EUINavigationAction::Accept:
+                Sys->Confirm();
+                return EUINavigationAction::Invalid;
+
+            case EUINavigationAction::Back:
+                Sys->Cancel();
+                return EUINavigationAction::Invalid;
+
+            default:
+                break;
+            }
+
+            return Action;
+        }
 
     private:
         TWeakObjectPtr<UNsUISubsystem> Subsystem;
