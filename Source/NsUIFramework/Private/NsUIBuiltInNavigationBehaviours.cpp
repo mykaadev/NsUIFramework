@@ -1,4 +1,4 @@
-#include "NsUINavigationBehaviours.h"
+#include "NsUIBuiltInNavigationBehaviours.h"
 
 #include "NsUISubsystem.h"
 

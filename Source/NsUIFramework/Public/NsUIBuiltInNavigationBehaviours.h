@@ -1,7 +1,7 @@
 #pragma once
 
 #include "NsUINavigationBehaviour.h"
-#include "NsUINavigationBehaviours.generated.h"
+#include "NsUIBuiltInNavigationBehaviours.generated.h"
 
 /** Default UI navigation that defers to NsUI's widget spatial search and Slate confirm/cancel. */
 UCLASS(Blueprintable)
