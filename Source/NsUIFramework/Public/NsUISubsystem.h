@@ -15,12 +15,12 @@ class UNsUIWidget;
 class UUserWidget;
 class UWidget;
 class SWidget;
-class UNsUISelectionBehavior;
+class UNsUINavigationBehaviour;
 
 /**
  * Central entry point for the retro UI stack. Manages layout creation, widget stacks per
  * layer, focus management (widgets/actors/locations), retro cursor syncing, and optional
- * pluggable selection behaviors that can drive bespoke interactions.
+ * pluggable navigation behaviours that can drive bespoke interactions.
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem, public FTickableGameObject
@@ -50,6 +50,10 @@ public:
     void Confirm();
     /** Trigger cancel/back on the current behavior or focused widget. */
     void Cancel();
+    /** Helper for navigation behaviours to forward confirm to Slate when no custom behaviour is needed. */
+    void ForwardConfirmToSlate();
+    /** Helper for navigation behaviours to forward cancel to Slate when no custom behaviour is needed. */
+    void ForwardCancelToSlate();
 
     /** Returns true when NsUI is currently controlling focus/navigation (layout or selection session active). */
     bool IsFrameworkActive() const;
@@ -65,10 +69,10 @@ public:
     virtual TStatId GetStatId() const override;
     virtual UWorld* GetTickableGameObjectWorld() const override { return GetWorld(); }
 
-    /** Swap in a new selection behavior, calling lifecycle events appropriately. */
-    void SetSelectionBehavior(UNsUISelectionBehavior* NewBehavior);
-    /** Begin a selection session over provided actors/locations using a behavior. */
-    void BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
+    /** Swap in a new navigation behaviour, calling lifecycle events appropriately. */
+    void SetNavigationBehaviour(UNsUINavigationBehaviour* NewBehaviour);
+    /** Begin a selection session over provided actors/locations using a behaviour. */
+    void BeginSelectionSession(UNsUINavigationBehaviour* Behaviour, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
     /** Tear down any active selection session and clear focus. */
     void EndSelectionSession();
     /** Cycle to the next focus target in the active selection session. */
@@ -77,6 +81,17 @@ public:
     void FocusPreviousTarget();
     /** Notify behaviors and cursor when focus changes. */
     void NotifyFocusChanged();
+    /** Navigate widgets using NsUI's spatial logic (for default UI navigation). */
+    void NavigateWidgets(EUINavigation Direction);
+    /** Navigate selection targets using default focus stepping. */
+    void NavigateSelectionTargets(EUINavigation Direction);
+    /** Navigate selection targets filtered by kind (actors/locations/widgets). */
+    void NavigateTargetsByKind(EUINavigation Direction, ENsUIFocusKind AllowedKind);
+    /** Directly focus a target by index inside the current selection list. */
+    void FocusTargetAtIndex(int32 Index);
+    /** Read-only accessors for navigation behaviours. */
+    const TArray<FNsUIFocusTarget>& GetFocusTargets() const { return FocusTargets; }
+    int32 GetFocusIndex() const { return FocusIndex; }
 
 private:
     /** Internal representation of a single layer's widget stack and focus history. */
@@ -119,8 +134,8 @@ private:
     TMap<TWeakPtr<SWidget>, TWeakObjectPtr<UWidget>> SlateToWidgetMap;
 
     UPROPERTY()
-    /** Currently bound selection behavior that receives confirm/hover/cancel/tick events. */
-    TObjectPtr<UNsUISelectionBehavior> ActiveBehavior;
+    /** Currently bound navigation behaviour that receives confirm/hover/cancel/tick events. */
+    TObjectPtr<UNsUINavigationBehaviour> ActiveNavigationBehaviour;
 
     void EnsureLayout();
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);

@@ -14,7 +14,7 @@
 #include "NsUIDebugOverlay.h"
 #include "NsUILayer.h"
 #include "NsUILayout.h"
-#include "NsUISelectionBehavior.h"
+#include "NsUINavigationBehaviour.h"
 #include "NsUIWidget.h"
 #include "Stats/Stats.h"
 #include "Widgets/SWidget.h"
@@ -85,6 +85,7 @@ bool IsWidgetFocusable(UWidget* Widget)
 UNsUISubsystem::UNsUISubsystem()
     : ActiveLayout(nullptr)
     , LastInputSource(ENsUIInputSource::KeyboardGamepad)
+    , ActiveNavigationBehaviour(nullptr)
 {
     DefaultLayoutClass = UNsUILayout::StaticClass();
 }
@@ -388,30 +389,13 @@ void UNsUISubsystem::Navigate(EUINavigation Direction)
     LastInputSource = ENsUIInputSource::KeyboardGamepad;
     UpdateCursorVisibility();
 
-    const bool bHasSelectionTargets = FocusTargets.Num() > 0;
-
-    if (ActiveBehavior && bHasSelectionTargets)
+    if (ActiveNavigationBehaviour)
     {
-        switch (Direction)
-        {
-        case EUINavigation::Right:
-        case EUINavigation::Down:
-        case EUINavigation::Next:
-            FocusNextTarget();
-            return;
-
-        case EUINavigation::Left:
-        case EUINavigation::Up:
-        case EUINavigation::Previous:
-            FocusPreviousTarget();
-            return;
-
-        default:
-            break;
-        }
+        ActiveNavigationBehaviour->OnNavigate(Direction);
+        return;
     }
 
-    MoveFocusWithFallback(Direction);
+    NavigateWidgets(Direction);
 }
 
 void UNsUISubsystem::Confirm()
@@ -419,9 +403,9 @@ void UNsUISubsystem::Confirm()
     LastInputSource = ENsUIInputSource::KeyboardGamepad;
     UpdateCursorVisibility();
 
-    if (ActiveBehavior && CurrentFocus.IsValid())
+    if (ActiveNavigationBehaviour && CurrentFocus.IsValid())
     {
-        ActiveBehavior->OnConfirm(CurrentFocus);
+        ActiveNavigationBehaviour->OnConfirm(CurrentFocus);
         return;
     }
 
@@ -433,20 +417,30 @@ void UNsUISubsystem::Cancel()
     LastInputSource = ENsUIInputSource::KeyboardGamepad;
     UpdateCursorVisibility();
 
-    if (ActiveBehavior)
+    if (ActiveNavigationBehaviour)
     {
-        ActiveBehavior->OnCancel();
+        ActiveNavigationBehaviour->OnCancel();
         return;
     }
 
     SendKeyThroughSlate(EKeys::Escape);
 }
 
+void UNsUISubsystem::ForwardConfirmToSlate()
+{
+    SendKeyThroughSlate(EKeys::Enter);
+}
+
+void UNsUISubsystem::ForwardCancelToSlate()
+{
+    SendKeyThroughSlate(EKeys::Escape);
+}
+
 void UNsUISubsystem::Tick(float DeltaTime)
 {
-    if (ActiveBehavior)
+    if (ActiveNavigationBehaviour)
     {
-        ActiveBehavior->OnTick(DeltaTime);
+        ActiveNavigationBehaviour->OnTick(DeltaTime);
     }
 
     if (CurrentFocus.Kind == ENsUIFocusKind::Actor || CurrentFocus.Kind == ENsUIFocusKind::Location)
@@ -457,7 +451,7 @@ void UNsUISubsystem::Tick(float DeltaTime)
 
 bool UNsUISubsystem::IsFrameworkActive() const
 {
-    if (ActiveBehavior != nullptr)
+    if (ActiveNavigationBehaviour != nullptr)
     {
         return true;
     }
@@ -484,34 +478,36 @@ TStatId UNsUISubsystem::GetStatId() const
     RETURN_QUICK_DECLARE_CYCLE_STAT(UNsUISubsystem, STATGROUP_Tickables);
 }
 
-void UNsUISubsystem::SetSelectionBehavior(UNsUISelectionBehavior* NewBehavior)
+void UNsUISubsystem::SetNavigationBehaviour(UNsUINavigationBehaviour* NewBehaviour)
 {
-    if (ActiveBehavior == NewBehavior)
+    if (ActiveNavigationBehaviour == NewBehaviour)
     {
         return;
     }
 
-    if (ActiveBehavior)
+    if (ActiveNavigationBehaviour)
     {
-        ActiveBehavior->OnExit();
+        ActiveNavigationBehaviour->OnExit();
+        ActiveNavigationBehaviour->SetOwningSubsystem(nullptr);
     }
 
-    ActiveBehavior = NewBehavior;
+    ActiveNavigationBehaviour = NewBehaviour;
 
-    if (ActiveBehavior)
+    if (ActiveNavigationBehaviour)
     {
-        ActiveBehavior->OnEnter();
+        ActiveNavigationBehaviour->SetOwningSubsystem(this);
+        ActiveNavigationBehaviour->OnEnter();
 
         if (CurrentFocus.IsValid())
         {
-            ActiveBehavior->OnHover(CurrentFocus);
+            ActiveNavigationBehaviour->OnHover(CurrentFocus);
         }
     }
 }
 
-void UNsUISubsystem::BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations)
+void UNsUISubsystem::BeginSelectionSession(UNsUINavigationBehaviour* Behaviour, const TArray<AActor*>& Actors, const TArray<FVector>& Locations)
 {
-    SetSelectionBehavior(Behavior);
+    SetNavigationBehaviour(Behaviour);
 
     FocusTargets.Reset();
     FocusIndex = INDEX_NONE;
@@ -540,14 +536,7 @@ void UNsUISubsystem::BeginSelectionSession(UNsUISelectionBehavior* Behavior, con
 
     if (FocusTargets.Num() > 0)
     {
-        FocusIndex = 0;
-        CurrentFocus = FocusTargets[0];
-        UpdateCursorToCurrentFocus();
-
-        if (ActiveBehavior)
-        {
-            ActiveBehavior->OnHover(CurrentFocus);
-        }
+        FocusTargetAtIndex(0);
     }
 }
 
@@ -556,7 +545,7 @@ void UNsUISubsystem::EndSelectionSession()
     FocusTargets.Reset();
     FocusIndex = INDEX_NONE;
     CurrentFocus = FNsUIFocusTarget{};
-    SetSelectionBehavior(nullptr);
+    SetNavigationBehaviour(nullptr);
 }
 
 void UNsUISubsystem::FocusNextTarget()
@@ -566,9 +555,8 @@ void UNsUISubsystem::FocusNextTarget()
         return;
     }
 
-    FocusIndex = (FocusIndex + 1) % FocusTargets.Num();
-    CurrentFocus = FocusTargets[FocusIndex];
-    NotifyFocusChanged();
+    const int32 NextIndex = (FocusIndex + 1) % FocusTargets.Num();
+    FocusTargetAtIndex(NextIndex);
 }
 
 void UNsUISubsystem::FocusPreviousTarget()
@@ -578,18 +566,107 @@ void UNsUISubsystem::FocusPreviousTarget()
         return;
     }
 
-    FocusIndex = (FocusIndex - 1 + FocusTargets.Num()) % FocusTargets.Num();
-    CurrentFocus = FocusTargets[FocusIndex];
+    const int32 PreviousIndex = (FocusIndex - 1 + FocusTargets.Num()) % FocusTargets.Num();
+    FocusTargetAtIndex(PreviousIndex);
+}
+
+void UNsUISubsystem::FocusTargetAtIndex(int32 Index)
+{
+    if (!FocusTargets.IsValidIndex(Index))
+    {
+        return;
+    }
+
+    FocusIndex = Index;
+    CurrentFocus = FocusTargets[Index];
     NotifyFocusChanged();
+}
+
+void UNsUISubsystem::NavigateWidgets(EUINavigation Direction)
+{
+    MoveFocusWithFallback(Direction);
+}
+
+void UNsUISubsystem::NavigateSelectionTargets(EUINavigation Direction)
+{
+    if (FocusTargets.Num() == 0)
+    {
+        return;
+    }
+
+    switch (Direction)
+    {
+    case EUINavigation::Right:
+    case EUINavigation::Down:
+    case EUINavigation::Next:
+        FocusNextTarget();
+        break;
+
+    case EUINavigation::Left:
+    case EUINavigation::Up:
+    case EUINavigation::Previous:
+        FocusPreviousTarget();
+        break;
+
+    default:
+        break;
+    }
+}
+
+void UNsUISubsystem::NavigateTargetsByKind(EUINavigation Direction, ENsUIFocusKind AllowedKind)
+{
+    if (FocusTargets.Num() == 0)
+    {
+        return;
+    }
+
+    TArray<int32> MatchingIndices;
+    for (int32 Index = 0; Index < FocusTargets.Num(); ++Index)
+    {
+        if (FocusTargets[Index].Kind == AllowedKind)
+        {
+            MatchingIndices.Add(Index);
+        }
+    }
+
+    if (MatchingIndices.Num() == 0)
+    {
+        return;
+    }
+
+    int32 SelectionPosition = MatchingIndices.IndexOfByKey(FocusIndex);
+    if (SelectionPosition == INDEX_NONE)
+    {
+        FocusTargetAtIndex(MatchingIndices[0]);
+        return;
+    }
+
+    const bool bIncrement = Direction == EUINavigation::Right || Direction == EUINavigation::Down || Direction == EUINavigation::Next;
+    const bool bDecrement = Direction == EUINavigation::Left || Direction == EUINavigation::Up || Direction == EUINavigation::Previous;
+
+    if (bIncrement)
+    {
+        SelectionPosition = (SelectionPosition + 1) % MatchingIndices.Num();
+    }
+    else if (bDecrement)
+    {
+        SelectionPosition = (SelectionPosition - 1 + MatchingIndices.Num()) % MatchingIndices.Num();
+    }
+    else
+    {
+        return;
+    }
+
+    FocusTargetAtIndex(MatchingIndices[SelectionPosition]);
 }
 
 void UNsUISubsystem::NotifyFocusChanged()
 {
     UpdateCursorToCurrentFocus();
 
-    if (ActiveBehavior && CurrentFocus.IsValid())
+    if (ActiveNavigationBehaviour && CurrentFocus.IsValid())
     {
-        ActiveBehavior->OnHover(CurrentFocus);
+        ActiveNavigationBehaviour->OnHover(CurrentFocus);
     }
 }
 

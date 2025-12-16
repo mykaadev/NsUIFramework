@@ -2,7 +2,7 @@
 
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "NsUIFrameworkTypes.h"
-#include "NsUISelectionBehavior.h"
+#include "NsUINavigationBehaviour.h"
 #include "UObject/SoftObjectPtr.h"
 
 #include "Blueprint/UserWidget.h"
@@ -36,13 +36,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NsUI")
     static void ToggleDebugOverlay();
 
-    /** Swap in a selection behavior for confirm/hover/cancel routing. */
+    /** Swap in a navigation behaviour for confirm/hover/cancel routing. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")
-    static void SetSelectionBehavior(UNsUISelectionBehavior* Behavior);
+    static void SetNavigationBehaviour(UNsUINavigationBehaviour* Behaviour);
 
     /** Begin a selection session targeting actors and/or world locations. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")
-    static void BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
+    static void BeginSelectionSession(UNsUINavigationBehaviour* Behaviour, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
 
     /** End the active selection session and clear focus/behavior. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")

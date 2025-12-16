@@ -71,7 +71,7 @@ enum class ENsUIFocusKind : uint8
 
 /**
  * Unified focus target that can track widgets, actors, or raw world locations so the
- * retro cursor and selection behaviors can work across UI and 3D spaces.
+ * retro cursor and navigation behaviours can work across UI and 3D spaces.
  */
 USTRUCT(BlueprintType)
 struct FNsUIFocusTarget

@@ -1,7 +1,7 @@
 #include "NsUILibrary.h"
 
 #include "NsUISubsystem.h"
-#include "NsUISelectionBehavior.h"
+#include "NsUINavigationBehaviour.h"
 #include "Engine/AssetManager.h"
 
 UUserWidget* UNsUILibrary::Push(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer)
@@ -59,19 +59,19 @@ void UNsUILibrary::ToggleDebugOverlay()
     }
 }
 
-void UNsUILibrary::SetSelectionBehavior(UNsUISelectionBehavior* Behavior)
+void UNsUILibrary::SetNavigationBehaviour(UNsUINavigationBehaviour* Behaviour)
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
-        Subsystem->SetSelectionBehavior(Behavior);
+        Subsystem->SetNavigationBehaviour(Behaviour);
     }
 }
 
-void UNsUILibrary::BeginSelectionSession(UNsUISelectionBehavior* Behavior, const TArray<AActor*>& Actors, const TArray<FVector>& Locations)
+void UNsUILibrary::BeginSelectionSession(UNsUINavigationBehaviour* Behaviour, const TArray<AActor*>& Actors, const TArray<FVector>& Locations)
 {
     if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
     {
-        Subsystem->BeginSelectionSession(Behavior, Actors, Locations);
+        Subsystem->BeginSelectionSession(Behaviour, Actors, Locations);
     }
 }
 
