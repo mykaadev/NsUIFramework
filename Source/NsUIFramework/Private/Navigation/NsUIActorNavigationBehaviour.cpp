@@ -1,30 +1,6 @@
-#include "NsUIBuiltInNavigationBehaviours.h"
+#include "Navigation/NsUIActorNavigationBehaviour.h"
 
 #include "NsUISubsystem.h"
-
-void UNsUIWidgetNavigationBehaviour::OnNavigate_Implementation(EUINavigation Direction)
-{
-    if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
-    {
-        Subsystem->NavigateWidgets(Direction);
-    }
-}
-
-void UNsUIWidgetNavigationBehaviour::OnConfirm_Implementation()
-{
-    if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
-    {
-        Subsystem->ForwardConfirmToSlate();
-    }
-}
-
-void UNsUIWidgetNavigationBehaviour::OnCancel_Implementation()
-{
-    if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
-    {
-        Subsystem->ForwardCancelToSlate();
-    }
-}
 
 void UNsUIActorNavigationBehaviour::OnEnter_Implementation()
 {
@@ -48,15 +24,6 @@ void UNsUIActorNavigationBehaviour::OnCancel_Implementation()
 {
     // Default actor cancel is a no-op so games can override in Blueprint/C++ as needed.
 }
-
-void UNsUILocationNavigationBehaviour::OnNavigate_Implementation(EUINavigation Direction)
-{
-    // Location navigation is intentionally empty here; implement custom logic per experience.
-}
-
-void UNsUILocationNavigationBehaviour::OnConfirm_Implementation() {}
-
-void UNsUILocationNavigationBehaviour::OnCancel_Implementation() {}
 
 void UNsUIActorNavigationBehaviour::SetActors(const TArray<AActor*>& InActors)
 {

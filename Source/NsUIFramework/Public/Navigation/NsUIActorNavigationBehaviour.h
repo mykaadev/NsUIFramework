@@ -1,19 +1,7 @@
 #pragma once
 
 #include "NsUINavigationBehaviour.h"
-#include "NsUIBuiltInNavigationBehaviours.generated.h"
-
-/** Default UI navigation that defers to NsUI's widget spatial search and Slate confirm/cancel. */
-UCLASS(Blueprintable)
-class NSUIFRAMEWORK_API UNsUIWidgetNavigationBehaviour : public UNsUINavigationBehaviour
-{
-    GENERATED_BODY()
-
-public:
-    virtual void OnNavigate_Implementation(EUINavigation Direction) override;
-    virtual void OnConfirm_Implementation() override;
-    virtual void OnCancel_Implementation() override;
-};
+#include "Navigation/NsUIActorNavigationBehaviour.generated.h"
 
 /** Navigation strategy that cycles through a supplied actor list. */
 UCLASS(Blueprintable)
@@ -48,16 +36,3 @@ private:
 
     int32 CurrentIndex = INDEX_NONE;
 };
-
-/** Navigation strategy stub for world-location driven navigation. */
-UCLASS(Blueprintable)
-class NSUIFRAMEWORK_API UNsUILocationNavigationBehaviour : public UNsUINavigationBehaviour
-{
-    GENERATED_BODY()
-
-public:
-    virtual void OnNavigate_Implementation(EUINavigation Direction) override;
-    virtual void OnConfirm_Implementation() override;
-    virtual void OnCancel_Implementation() override;
-};
-

@@ -44,7 +44,7 @@ public:
     /** Clear an entire layer stack. */
     void PopAllWidgetsFromLayer(ENsUILayer Layer);
 
-    /** Route directional navigation into Slate, with fallback spatial search. */
+    /** Route directional navigation into the active behaviour. */
     void Navigate(EUINavigation Direction);
     /** Trigger confirm/accept on the current focus or behavior. */
     void Confirm();
@@ -60,19 +60,13 @@ public:
 
     void ToggleDebugOverlay();
 
-    /** Convenience getter for current widget focus. */
-    UWidget* GetCurrentFocusedWidget() const { return CurrentWidgetFocus.Get(); }
-    /** Update focus state when Slate hover changes. */
-    void HandleHoverFocus(UWidget* Widget);
-
     virtual void Tick(float DeltaTime) override;
     virtual TStatId GetStatId() const override;
     virtual UWorld* GetTickableGameObjectWorld() const override { return GetWorld(); }
 
     /** Swap in a new navigation behaviour, calling lifecycle events appropriately. */
     void SetNavigationBehaviour(UNsUINavigationBehaviour* NewBehaviour);
-    /** Navigate widgets using NsUI's spatial logic (for default UI navigation). */
-    void NavigateWidgets(EUINavigation Direction);
+
     /** Update the retro cursor to follow a widget. */
     void UpdateCursorToWidget(UWidget* Widget);
     /** Update the retro cursor to follow an actor. */
@@ -80,13 +74,24 @@ public:
     /** Update the retro cursor to follow an arbitrary location. */
     void UpdateCursorToLocation(const FVector& WorldLocation);
 
+    /** Project a widget into viewport space. */
+    FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
+    /** Project an actor into viewport space. */
+    FVector2D GetActorScreenPosition(AActor* Actor) const;
+    /** Project a world-space location into viewport space. */
+    FVector2D GetLocationScreenPosition(const FVector& WorldLocation) const;
+
+    /** Retrieve the top-most active layer (Modal > Menu > Game). */
+    ENsUILayer GetTopActiveLayer() const;
+    /** Retrieve the top-most widget on a given layer. */
+    UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
+
 private:
     /** Internal representation of a single layer's widget stack and focus history. */
     struct FNsUILayerState
     {
         TWeakObjectPtr<UNsUILayer> LayerWidget;
         TArray<TWeakObjectPtr<UUserWidget>> Stack;
-        TArray<TWeakObjectPtr<UWidget>> FocusHistory;
     };
 
     UPROPERTY()
@@ -107,8 +112,6 @@ private:
     TMap<ENsUILayer, FNsUILayerState> LayerStates;
     /** Tracks most recent input device to toggle cursor visibility rules. */
     ENsUIInputSource LastInputSource;
-    /** Current widget focus driving the retro cursor while in UMG navigation. */
-    TWeakObjectPtr<UWidget> CurrentWidgetFocus;
     /** Handles for Slate focus/tick delegates. */
     FDelegateHandle FocusChangedHandle;
     FDelegateHandle SlatePreTickHandle;
@@ -122,10 +125,6 @@ private:
 
     void EnsureLayout();
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);
-    void UpdateFocus(UWidget* Widget, EFocusCause FocusCause);
-    UWidget* ResolveInitialFocus(UUserWidget* Screen) const;
-    UWidget* FindFirstFocusable(UWidget* Root) const;
-    void RestoreFocusForLayer(ENsUILayer Layer);
 
     void SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
     TWeakPtr<SWidget> GetSlateFocus() const;
@@ -134,14 +133,6 @@ private:
     void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
 
     void RegisterWidgetTree(UUserWidget* Root);
-
-    FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
-    FVector2D GetActorScreenPosition(AActor* Actor) const;
-    FVector2D GetLocationScreenPosition(const FVector& WorldLocation) const;
-    ENsUILayer GetTopActiveLayer() const;
-    UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
-    void MoveFocusWithFallback(EUINavigation Direction);
-    UWidget* FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origin, EUINavigation Direction) const;
     void UpdateCursorVisibility();
     void SyncHoverFocusWithSlate(float InDeltaTime);
 

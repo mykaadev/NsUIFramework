@@ -1,9 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "NsUIFrameworkTypes.h"
 #include "NsUINavigationBehaviour.generated.h"
 
 class UNsUISubsystem;
+class UUserWidget;
+class UWidget;
 
 /**
  * Swappable navigation/interaction policy that consumes confirm/cancel input and optional ticking.
@@ -46,6 +49,26 @@ public:
     /** Called when cancel/back input is pressed. */
     UFUNCTION(BlueprintNativeEvent)
     void OnCancel();
+
+    /** Notified when a widget is pushed onto a layer. Default implementation is a no-op. */
+    UFUNCTION(BlueprintNativeEvent)
+    void OnWidgetAdded(UUserWidget* Screen, ENsUILayer Layer);
+
+    /** Notified when a widget is removed from a layer. Default implementation is a no-op. */
+    UFUNCTION(BlueprintNativeEvent)
+    void OnWidgetRemoved(ENsUILayer Layer, UUserWidget* Screen);
+
+    /** Notified when a full layer has been cleared. Default implementation is a no-op. */
+    UFUNCTION(BlueprintNativeEvent)
+    void OnLayerCleared(ENsUILayer Layer);
+
+    /** Notified when Slate focus changes to a specific widget. Default implementation is a no-op. */
+    UFUNCTION(BlueprintNativeEvent)
+    void OnSlateFocusChanged(UWidget* FocusedWidget);
+
+    /** Notified when Slate hover highlights a widget. Default implementation is a no-op. */
+    UFUNCTION(BlueprintNativeEvent)
+    void OnSlateHover(UWidget* HoveredWidget);
 
 private:
     /** Owning subsystem (weak to avoid lifetime issues). */
