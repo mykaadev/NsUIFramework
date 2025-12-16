@@ -19,8 +19,8 @@ class UNsUINavigationBehaviour;
 
 /**
  * Central entry point for the retro UI stack. Manages layout creation, widget stacks per
- * layer, focus management (widgets/actors/locations), retro cursor syncing, and optional
- * pluggable navigation behaviours that can drive bespoke interactions.
+ * layer, widget focus management, retro cursor syncing, and pluggable navigation behaviours
+ * that own their own navigation state (UMG, actor selection, etc.).
  */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem, public FTickableGameObject
@@ -55,13 +55,13 @@ public:
     /** Helper for navigation behaviours to forward cancel to Slate when no custom behaviour is needed. */
     void ForwardCancelToSlate();
 
-    /** Returns true when NsUI is currently controlling focus/navigation (layout or selection session active). */
+    /** Returns true when NsUI is currently controlling focus/navigation (layout present or a navigation behaviour is active). */
     bool IsFrameworkActive() const;
 
     void ToggleDebugOverlay();
 
-    /** Convenience getter for widget focus (returns null for actor/location focus kinds). */
-    UWidget* GetCurrentFocusedWidget() const { return CurrentFocus.Widget.Get(); }
+    /** Convenience getter for current widget focus. */
+    UWidget* GetCurrentFocusedWidget() const { return CurrentWidgetFocus.Get(); }
     /** Update focus state when Slate hover changes. */
     void HandleHoverFocus(UWidget* Widget);
 
@@ -71,27 +71,14 @@ public:
 
     /** Swap in a new navigation behaviour, calling lifecycle events appropriately. */
     void SetNavigationBehaviour(UNsUINavigationBehaviour* NewBehaviour);
-    /** Begin a selection session over provided actors/locations using a behaviour. */
-    void BeginSelectionSession(UNsUINavigationBehaviour* Behaviour, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
-    /** Tear down any active selection session and clear focus. */
-    void EndSelectionSession();
-    /** Cycle to the next focus target in the active selection session. */
-    void FocusNextTarget();
-    /** Cycle to the previous focus target in the active selection session. */
-    void FocusPreviousTarget();
-    /** Notify behaviors and cursor when focus changes. */
-    void NotifyFocusChanged();
     /** Navigate widgets using NsUI's spatial logic (for default UI navigation). */
     void NavigateWidgets(EUINavigation Direction);
-    /** Navigate selection targets using default focus stepping. */
-    void NavigateSelectionTargets(EUINavigation Direction);
-    /** Navigate selection targets filtered by kind (actors/locations/widgets). */
-    void NavigateTargetsByKind(EUINavigation Direction, ENsUIFocusKind AllowedKind);
-    /** Directly focus a target by index inside the current selection list. */
-    void FocusTargetAtIndex(int32 Index);
-    /** Read-only accessors for navigation behaviours. */
-    const TArray<FNsUIFocusTarget>& GetFocusTargets() const { return FocusTargets; }
-    int32 GetFocusIndex() const { return FocusIndex; }
+    /** Update the retro cursor to follow a widget. */
+    void UpdateCursorToWidget(UWidget* Widget);
+    /** Update the retro cursor to follow an actor. */
+    void UpdateCursorToActor(AActor* Actor);
+    /** Update the retro cursor to follow an arbitrary location. */
+    void UpdateCursorToLocation(const FVector& WorldLocation);
 
 private:
     /** Internal representation of a single layer's widget stack and focus history. */
@@ -120,12 +107,8 @@ private:
     TMap<ENsUILayer, FNsUILayerState> LayerStates;
     /** Tracks most recent input device to toggle cursor visibility rules. */
     ENsUIInputSource LastInputSource;
-    /** Current focus target driving the retro cursor. */
-    FNsUIFocusTarget CurrentFocus;
-    /** Active selection session targets (actors/locations). */
-    TArray<FNsUIFocusTarget> FocusTargets;
-    /** Index into FocusTargets for cycling. */
-    int32 FocusIndex = INDEX_NONE;
+    /** Current widget focus driving the retro cursor while in UMG navigation. */
+    TWeakObjectPtr<UWidget> CurrentWidgetFocus;
     /** Handles for Slate focus/tick delegates. */
     FDelegateHandle FocusChangedHandle;
     FDelegateHandle SlatePreTickHandle;
@@ -159,8 +142,6 @@ private:
     UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
     void MoveFocusWithFallback(EUINavigation Direction);
     UWidget* FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origin, EUINavigation Direction) const;
-
-    void UpdateCursorToCurrentFocus();
     void UpdateCursorVisibility();
     void SyncHoverFocusWithSlate(float InDeltaTime);
 

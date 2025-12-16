@@ -66,35 +66,3 @@ void UNsUILibrary::SetNavigationBehaviour(UNsUINavigationBehaviour* Behaviour)
         Subsystem->SetNavigationBehaviour(Behaviour);
     }
 }
-
-void UNsUILibrary::BeginSelectionSession(UNsUINavigationBehaviour* Behaviour, const TArray<AActor*>& Actors, const TArray<FVector>& Locations)
-{
-    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
-    {
-        Subsystem->BeginSelectionSession(Behaviour, Actors, Locations);
-    }
-}
-
-void UNsUILibrary::EndSelectionSession()
-{
-    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
-    {
-        Subsystem->EndSelectionSession();
-    }
-}
-
-void UNsUILibrary::FocusNextTarget()
-{
-    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
-    {
-        Subsystem->FocusNextTarget();
-    }
-}
-
-void UNsUILibrary::FocusPreviousTarget()
-{
-    if (UNsUISubsystem* Subsystem = UNsUISubsystem::GetSubsystem())
-    {
-        Subsystem->FocusPreviousTarget();
-    }
-}

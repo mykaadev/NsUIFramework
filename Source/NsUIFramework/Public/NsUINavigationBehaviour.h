@@ -1,15 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NsUIFrameworkTypes.h"
 #include "NsUINavigationBehaviour.generated.h"
 
 class UNsUISubsystem;
 
 /**
- * Swappable navigation/interaction policy that consumes confirm/hover/cancel input and optional
- * ticking during selection sessions. Implement in Blueprint or C++ to drive custom behavior when
- * navigating actors, widgets, or arbitrary world locations.
+ * Swappable navigation/interaction policy that consumes confirm/cancel input and optional ticking.
+ * Implement in Blueprint or C++ to drive custom behavior when navigating widgets, actors, or other
+ * targets without relying on a centralized focus target struct.
  */
 UCLASS(Abstract, Blueprintable)
 class NSUIFRAMEWORK_API UNsUINavigationBehaviour : public UObject
@@ -42,11 +41,7 @@ public:
 
     /** Called when confirm/accept input is pressed. */
     UFUNCTION(BlueprintNativeEvent)
-    void OnConfirm(const FNsUIFocusTarget& Target);
-
-    /** Called whenever focus changes to a new target. */
-    UFUNCTION(BlueprintNativeEvent)
-    void OnHover(const FNsUIFocusTarget& Target);
+    void OnConfirm();
 
     /** Called when cancel/back input is pressed. */
     UFUNCTION(BlueprintNativeEvent)

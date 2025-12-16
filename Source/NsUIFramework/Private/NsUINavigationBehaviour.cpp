@@ -12,12 +12,10 @@ void UNsUINavigationBehaviour::OnNavigate_Implementation(EUINavigation Direction
 {
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
-        Subsystem->NavigateSelectionTargets(Direction);
+        Subsystem->NavigateWidgets(Direction);
     }
 }
 
-void UNsUINavigationBehaviour::OnConfirm_Implementation(const FNsUIFocusTarget& Target) {}
-
-void UNsUINavigationBehaviour::OnHover_Implementation(const FNsUIFocusTarget& Target) {}
+void UNsUINavigationBehaviour::OnConfirm_Implementation() {}
 
 void UNsUINavigationBehaviour::OnCancel_Implementation() {}

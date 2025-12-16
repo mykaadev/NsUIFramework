@@ -8,8 +8,6 @@
 #include "Blueprint/UserWidget.h"
 #include "NsUILibrary.generated.h"
 
-class AActor;
-
 /** Blueprint surface for driving the NsUI retro UI subsystem. */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILibrary : public UBlueprintFunctionLibrary
@@ -39,20 +37,4 @@ public:
     /** Swap in a navigation behaviour for confirm/hover/cancel routing. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")
     static void SetNavigationBehaviour(UNsUINavigationBehaviour* Behaviour);
-
-    /** Begin a selection session targeting actors and/or world locations. */
-    UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")
-    static void BeginSelectionSession(UNsUINavigationBehaviour* Behaviour, const TArray<AActor*>& Actors, const TArray<FVector>& Locations);
-
-    /** End the active selection session and clear focus/behavior. */
-    UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")
-    static void EndSelectionSession();
-
-    /** Step forward through selection targets. */
-    UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")
-    static void FocusNextTarget();
-
-    /** Step backward through selection targets. */
-    UFUNCTION(BlueprintCallable, Category = "NsUI|Selection")
-    static void FocusPreviousTarget();
 };

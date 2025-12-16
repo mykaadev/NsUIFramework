@@ -1,87 +1,47 @@
-# NsUI Framework Focus & Navigation Overview
+# NsUI Framework Navigation Overview
 
-This document summarizes how to drive the retro cursor, focus targets, and pluggable navigation behaviours in both C++ and Blueprint. It is intended as a fast reference for engineers and designers wiring up interactive flows that span UMG widgets and in-world elements.
+This guide explains the streamlined navigation model after removing focus targets. Each navigation behaviour owns its own state, keeping the subsystem lean while still exposing helpers for cursor placement and widget focus.
 
 ## Core Concepts
-
-- **ENsUILayer** – Screen strata (`Game`, `Menu`, `Modal`) used to organize stacks of widgets with predictable ordering and input routing.
-- **FNsUIFocusTarget** – Unified focus descriptor that can reference a UWidget, an AActor, or a raw world-space location. The subsystem projects world positions to screen space so the retro cursor can follow non-widget targets.
-- **UNsUISubsystem** – Local-player subsystem that owns layout creation, cursor syncing, widget stack management, and navigation behaviours.
-- **UNsUINavigationBehaviour** – Swappable behavior object that receives `OnEnter`, `OnExit`, `OnTick`, `OnNavigate`, `OnConfirm`, `OnHover`, and `OnCancel` callbacks for custom interaction logic.
-- **Built-in behaviours** – `UNsUIWidgetNavigationBehaviour` (UMG widgets), `UNsUIActorNavigationBehaviour` (actors only), and `UNsUILocationNavigationBehaviour` (world points only). Navigation mode enums are deprecated in favor of explicitly passing a behaviour instance.
+- **ENsUILayer** – Layered widget stacks (`Game`, `Menu`, `Modal`) managed by the subsystem.
+- **UNsUISubsystem** – Creates layouts, tracks widget focus, syncs the retro cursor, and delegates navigation input to the active behaviour.
+- **UNsUINavigationBehaviour** – Base class for navigation policies. Behaviours receive `OnEnter`, `OnExit`, `OnTick`, `OnNavigate`, `OnConfirm`, and `OnCancel` to drive custom flows.
+- **Built-ins** – `UNsUIWidgetNavigationBehaviour` handles UMG focus; `UNsUIActorNavigationBehaviour` cycles through a supplied actor list; `UNsUILocationNavigationBehaviour` is a stub for location-based movement.
 
 ## Typical Flows
-
 ### Displaying Screens
-
 ```cpp
-// C++ (synchronous class)
 UNsUISubsystem::GetSubsystem()->PushWidgetToLayer(MyScreenClass, ENsUILayer::Menu);
-
-// Blueprint
-// Call NsUI -> Push (SoftClass) or Push (Class) with your widget asset and layer.
 ```
+Blueprints expose the same calls via **NsUI** → `Push` (hard or soft class), with `Pop`/`PopAll` to unwind stacks. Focus history per layer is restored automatically.
 
-Use `Pop` or `PopAll` to remove screens. The subsystem tracks focus history per layer so backing out restores prior focus automatically.
+### Navigation and Input
+- `Navigate` routes through the active navigation behaviour. Without an override, the subsystem uses widget spatial navigation.
+- `Confirm` and `Cancel` first hit the active behaviour; if none is set, they forward to Slate (Enter/Escape).
+- The subsystem installs a Slate navigation wrapper so arrows only route through NsUI when the framework is active.
 
-### Managing Focus and the Retro Cursor
+### Cursor Sync
+- UMG focus changes call `UpdateCursorToWidget` so the retro cursor follows the focused widget.
+- Actor behaviours can call `UpdateCursorToActor` each tick (or on change) to keep the cursor aligned with moving actors.
+- Use `UpdateCursorToLocation` for custom behaviours that operate on world-space points.
 
-- The subsystem keeps `CurrentFocus` as an `FNsUIFocusTarget`. Calling navigation/confirm/cancel routes input through Slate and/or the active navigation behaviour.
-- Cursor position is updated via `UpdateCursorToCurrentFocus()`, which projects widgets, actors, or locations into screen space.
-- `LastInputSource` is tracked to hide the retro cursor when mouse input is active and show it for keyboard/gamepad navigation.
-
-### Selection Sessions Over World Targets
-
-Use selection sessions to traverse arbitrary actors or locations while reusing the retro cursor and behavior callbacks.
-
+### Actor Navigation Behaviour
 ```cpp
-// Build targets and behavior, then start a session.
-TArray<AActor*> Actors = {/* ... */};
-TArray<FVector> Locations = {/* ... */};
-UNsUINavigationBehaviour* Behaviour = NewObject<UNsUIActorNavigationBehaviour>(GetTransientPackage());
-UNsUISubsystem::GetSubsystem()->BeginSelectionSession(Behaviour, Actors, Locations);
+UNsUIActorNavigationBehaviour* Behaviour = NewObject<UNsUIActorNavigationBehaviour>(this);
+Behaviour->SetActors(MyActorArray);
+Subsystem->SetNavigationBehaviour(Behaviour);
 ```
+`SetActors` stores the list and focuses the first entry. `OnNavigate` cycles forward/back, `OnTick` keeps the cursor projected to the current actor, and `OnConfirm`/`OnCancel` are intentionally empty for game-specific overrides.
 
-Blueprints expose the same calls under the **NsUI|Selection** category:
-- `BeginSelectionSession`
-- `EndSelectionSession`
-- `FocusNextTarget`
-- `FocusPreviousTarget`
-- `SetNavigationBehaviour`
+### Custom Behaviours
+Derive from `UNsUINavigationBehaviour` to implement bespoke logic (e.g., grid locations, radial menus). Use the subsystem helpers to:
+- Move focus between widgets: `NavigateWidgets(Direction)`.
+- Drive cursor placement: `UpdateCursorToWidget`, `UpdateCursorToActor`, or `UpdateCursorToLocation`.
 
-### Authoring a Selection Behavior
+## Blueprint Surface
+- Screen stack: `Push`, `Pop`, `PopAll`, `ToggleDebugOverlay`.
+- Behaviour control: `SetNavigationBehaviour`.
 
-Create a Blueprint derived from `UNsUINavigationBehaviour` (or subclass the provided `UNsUIWidgetNavigationBehaviour`, `UNsUIActorNavigationBehaviour`, or `UNsUILocationNavigationBehaviour`) and implement the native events:
-
-- **OnEnter** – initialize state or spawn previews when the behavior is activated.
-- **OnExit** – clean up spawned actors/widgets when the behavior is removed.
-- **OnTick** – per-frame updates (drag outlines, timers, aim assists). Only called while active.
-- **OnNavigate** – handle directional input. The default implementation cycles selection targets; the built-in behaviours focus widgets, actors, or locations respectively.
-- **OnHover** – invoked whenever focus moves to a new `FNsUIFocusTarget`. Use `Target.Kind` to branch between widget, actor, or location handling.
-- **OnConfirm / OnCancel** – handle user intent; you may end the session or keep it alive.
-
-### Driving Selection From Input
-
-- Call `Confirm` or `Cancel` on the subsystem (or map to input actions) to forward to the active navigation behaviour. If no behaviour is active, the calls fall back to Slate’s default confirm/cancel handling.
-- Navigation (`Navigate`) routes through the active navigation behaviour; without one, NsUI falls back to widget spatial navigation.
-
-## Debugging Tips
-
-- Use `ToggleDebugOverlay` (Blueprint or C++) to display focus history, layer stacks, and cursor data in-editor.
-- The subsystem ticks via `FTickableGameObject`, so behaviors receive `OnTick` even on engine versions where `ULocalPlayerSubsystem` lacks a tick override.
-- `FNsUIFocusTarget::DebugName` can be set when constructing focus entries to label targets in logs or overlays.
-
-## Key API Surface (Blueprint)
-
-- **Screen Stack**: `Push`, `Pop`, `PopAll`, `ToggleDebugOverlay`
-- **Selection**: `SetNavigationBehaviour`, `BeginSelectionSession`, `EndSelectionSession`, `FocusNextTarget`, `FocusPreviousTarget`
-
-## Key API Surface (C++)
-
-- `UNsUISubsystem::PushWidgetToLayer`, `PopWidgetFromLayer`, `PopAllWidgetsFromLayer`
-- `UNsUISubsystem::SetNavigationBehaviour`
-- `UNsUISubsystem::BeginSelectionSession`, `EndSelectionSession`
-- `UNsUISubsystem::FocusNextTarget`, `FocusPreviousTarget`
-- `UNsUISubsystem::Confirm`, `Cancel`, `Navigate`
-
-With these calls you can compose experiences that seamlessly transition focus between menus and world objects while keeping the retro cursor synchronized.
+## Debugging
+- `ToggleDebugOverlay` reveals layer stacks and focus history in-editor.
+- The subsystem ticks via `FTickableGameObject`, so behaviours receive `OnTick` even on engine versions where `ULocalPlayerSubsystem` lacks a tick override.
