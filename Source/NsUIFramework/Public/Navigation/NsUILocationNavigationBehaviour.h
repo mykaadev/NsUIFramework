@@ -1,7 +1,7 @@
 #pragma once
 
 #include "NsUINavigationBehaviour.h"
-#include "Navigation/NsUILocationNavigationBehaviour.generated.h"
+#include "NsUILocationNavigationBehaviour.generated.h"
 
 /** Navigation strategy stub for world-location driven navigation. */
 UCLASS(Blueprintable)

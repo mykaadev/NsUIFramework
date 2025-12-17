@@ -1,7 +1,7 @@
 #pragma once
 
 #include "NsUINavigationBehaviour.h"
-#include "Navigation/NsUIActorNavigationBehaviour.generated.h"
+#include "NsUIActorNavigationBehaviour.generated.h"
 
 /** Navigation strategy that cycles through a supplied actor list. */
 UCLASS(Blueprintable)

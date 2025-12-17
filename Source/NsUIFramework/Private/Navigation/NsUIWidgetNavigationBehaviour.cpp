@@ -10,19 +10,6 @@
 #include "NsUIWidget.h"
 #include "Widgets/SWidget.h"
 
-namespace
-{
-bool IsWidgetFocusable(UWidget* Widget)
-{
-    if (!Widget)
-    {
-        return false;
-    }
-
-    const TSharedPtr<SWidget> CachedWidget = Widget->GetCachedWidget();
-    return CachedWidget.IsValid() && CachedWidget->SupportsKeyboardFocus();
-}
-}
 
 void UNsUIWidgetNavigationBehaviour::OnEnter_Implementation()
 {
@@ -254,11 +241,6 @@ void UNsUIWidgetNavigationBehaviour::MoveFocusWithFallback(EUINavigation Directi
     }
 
     const ENsUILayer TopLayer = Subsystem->GetTopActiveLayer();
-    if (TopLayer == ENsUILayer::None)
-    {
-        return;
-    }
-
     UUserWidget* Screen = Subsystem->GetTopWidgetOnLayer(TopLayer);
     if (!Screen)
     {
@@ -350,7 +332,13 @@ UWidget* UNsUIWidgetNavigationBehaviour::FindSpatialNeighbor(UUserWidget* Screen
     return BestCandidate;
 }
 
-bool UNsUIWidgetNavigationBehaviour::IsWidgetFocusable(UWidget* Widget) const
+bool UNsUIWidgetNavigationBehaviour::IsWidgetFocusable(const UWidget* const Widget) const
 {
-    return ::IsWidgetFocusable(Widget);
+    if (!Widget)
+    {
+        return false;
+    }
+
+    const TSharedPtr<SWidget> CachedWidget = Widget->GetCachedWidget();
+    return CachedWidget.IsValid() && CachedWidget->SupportsKeyboardFocus();
 }

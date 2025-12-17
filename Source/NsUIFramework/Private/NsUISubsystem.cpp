@@ -1,5 +1,5 @@
-#include "NsUISubsystem.h"
 #include "CoreMinimal.h"
+#include "NsUISubsystem.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
@@ -12,12 +12,10 @@
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/NumericLimits.h"
+#include "Navigation/NsUIWidgetNavigationBehaviour.h"
 #include "NsUIDebugOverlay.h"
 #include "NsUILayer.h"
 #include "NsUILayout.h"
-#include "Navigation/NsUIWidgetNavigationBehaviour.h"
-#include "Navigation/NsUIActorNavigationBehaviour.h"
-#include "Navigation/NsUILocationNavigationBehaviour.h"
 #include "NsUINavigationBehaviour.h"
 #include "Stats/Stats.h"
 #include "Widgets/SWidget.h"
@@ -36,10 +34,15 @@ namespace
         {
         }
 
+        virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override
+        {
+            // No-op (we only care about mouse button events)
+        }
+
         virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
         {
             UNsUISubsystem* Sys = Subsystem.Get();
-            if (!Sys || !Sys->IsFrameworkActive())
+            if (!Sys || !Sys->IsFrameworkActive() || Sys->IsForwardingSyntheticInputToSlate())
             {
                 return false;
             }
@@ -48,12 +51,6 @@ namespace
             if (Button == EKeys::LeftMouseButton)
             {
                 Sys->Confirm();
-                return true;
-            }
-
-            if (Button == EKeys::RightMouseButton)
-            {
-                Sys->Cancel();
                 return true;
             }
 
@@ -67,10 +64,9 @@ namespace
     /** Custom navigation config that can route nav events into UNsUISubsystem when active. */
     class FNsUINavigationConfig : public FNavigationConfig
     {
-    public:
-        FNsUINavigationConfig(
-            TWeakObjectPtr<UNsUISubsystem> InSubsystem,
-            const TSharedRef<FNavigationConfig>& InWrappedConfig)
+        public:
+
+        FNsUINavigationConfig(TWeakObjectPtr<UNsUISubsystem> InSubsystem, const TSharedRef<FNavigationConfig>& InWrappedConfig)
             : Subsystem(InSubsystem)
             , WrappedConfig(InWrappedConfig)
         {
@@ -83,9 +79,9 @@ namespace
             const EUINavigation Direction = WrappedConfig->GetNavigationDirectionFromKey(InKeyEvent);
 
             UNsUISubsystem* Sys = Subsystem.Get();
-            if (!Sys || !Sys->IsFrameworkActive())
+            if (!Sys || !Sys->IsFrameworkActive() || Sys->IsForwardingSyntheticInputToSlate())
             {
-                // Framework inactive → behave exactly like the original config.
+                // Framework inactive -> behave exactly like the original config.
                 return Direction;
             }
 
@@ -107,7 +103,7 @@ namespace
             const EUINavigationAction Action = WrappedConfig->GetNavigationActionFromKey(InKeyEvent);
 
             UNsUISubsystem* Sys = Subsystem.Get();
-            if (!Sys || !Sys->IsFrameworkActive())
+            if (!Sys || !Sys->IsFrameworkActive() || Sys->IsForwardingSyntheticInputToSlate())
             {
                 return Action;
             }
@@ -589,11 +585,19 @@ void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysSta
         return;
     }
 
+    // Prevent nested re-entry from stomping the flag back to false mid-call
+    if (bForwardingSyntheticInputToSlate)
+    {
+        return;
+    }
+
+    bForwardingSyntheticInputToSlate = true;
     const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : KeyboardUserIndex;
     const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
 
     FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
     FSlateApplication::Get().ProcessKeyUpEvent(KeyEvent);
+    bForwardingSyntheticInputToSlate = false;
 }
 
 TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const

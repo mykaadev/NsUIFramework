@@ -1,7 +1,12 @@
 #pragma once
 
 #include "NsUINavigationBehaviour.h"
-#include "Navigation/NsUIWidgetNavigationBehaviour.generated.h"
+#include "NsUIWidgetNavigationBehaviour.generated.h"
+
+struct FNsUIWidgetLayerState
+{
+    TArray<TWeakObjectPtr<UWidget>> FocusHistory;
+};
 
 /** Navigation behaviour that owns UMG focus movement and cursor updates. */
 UCLASS(Blueprintable)
@@ -22,10 +27,6 @@ public:
     virtual void OnSlateHover_Implementation(UWidget* HoveredWidget) override;
 
 private:
-    struct FNsUIWidgetLayerState
-    {
-        TArray<TWeakObjectPtr<UWidget>> FocusHistory;
-    };
 
     void UpdateFocus(UWidget* Widget, EFocusCause FocusCause);
     UWidget* ResolveInitialFocus(UUserWidget* Screen) const;
@@ -34,11 +35,10 @@ private:
     void MoveFocusWithFallback(EUINavigation Direction);
     UWidget* FindSpatialNeighbor(UUserWidget* Screen, UWidget* Origin, EUINavigation Direction) const;
 
-    bool IsWidgetFocusable(UWidget* Widget) const;
+    bool IsWidgetFocusable(const UWidget* const Widget) const;
 
     UPROPERTY()
     TWeakObjectPtr<UWidget> CurrentWidgetFocus;
 
-    UPROPERTY()
     TMap<ENsUILayer, FNsUIWidgetLayerState> LayerStates;
 };

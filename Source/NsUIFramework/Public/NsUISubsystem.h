@@ -37,21 +37,28 @@ public:
 
     /** Push a widget class onto the given UI layer (synchronous class). */
     UUserWidget* PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer);
+
     /** Push a soft widget class onto the given UI layer (loads if needed). */
     UUserWidget* PushWidgetToLayer(TSoftClassPtr<UUserWidget> ScreenClass, ENsUILayer Layer);
+
     /** Remove the top-most widget from a layer stack. */
     void PopWidgetFromLayer(ENsUILayer Layer);
+
     /** Clear an entire layer stack. */
     void PopAllWidgetsFromLayer(ENsUILayer Layer);
 
     /** Route directional navigation into the active behaviour. */
     void Navigate(EUINavigation Direction);
+
     /** Trigger confirm/accept on the current focus or behavior. */
     void Confirm();
+
     /** Trigger cancel/back on the current behavior or focused widget. */
     void Cancel();
+
     /** Helper for navigation behaviours to forward confirm to Slate when no custom behaviour is needed. */
     void ForwardConfirmToSlate();
+
     /** Helper for navigation behaviours to forward cancel to Slate when no custom behaviour is needed. */
     void ForwardCancelToSlate();
 
@@ -76,15 +83,27 @@ public:
 
     /** Project a widget into viewport space. */
     FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
+
     /** Project an actor into viewport space. */
     FVector2D GetActorScreenPosition(AActor* Actor) const;
+
     /** Project a world-space location into viewport space. */
     FVector2D GetLocationScreenPosition(const FVector& WorldLocation) const;
 
     /** Retrieve the top-most active layer (Modal > Menu > Game). */
     ENsUILayer GetTopActiveLayer() const;
+
+    /** Handle Hover Focus */
+    void HandleHoverFocus(UWidget* Widget);
+
     /** Retrieve the top-most widget on a given layer. */
     UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
+
+    /** Is forwarding input */
+    bool IsForwardingSyntheticInputToSlate() const { return bForwardingSyntheticInputToSlate; }
+
+	/** True when a navigation behaviour is bound (meaning NsUI intends to own confirm/cancel/navigation). */
+	bool HasActiveNavigationBehaviour() const;
 
 private:
     /** Internal representation of a single layer's widget stack and focus history. */
@@ -119,9 +138,13 @@ private:
     /** Reverse lookup from Slate widget to UWidget for hover/focus reconciliation. */
     TMap<TWeakPtr<SWidget>, TWeakObjectPtr<UWidget>> SlateToWidgetMap;
 
-    UPROPERTY()
     /** Currently bound navigation behaviour that receives confirm/hover/cancel/tick events. */
+    UPROPERTY()
     TObjectPtr<UNsUINavigationBehaviour> ActiveNavigationBehaviour;
+
+    /** Currently forwarding synthetic input */
+    UPROPERTY()
+    bool bForwardingSyntheticInputToSlate;
 
     void EnsureLayout();
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);

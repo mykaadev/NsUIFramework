@@ -4,9 +4,6 @@
 #include "NsUIFrameworkTypes.h"
 #include "NsUINavigationBehaviour.generated.h"
 
-class UNsUISubsystem;
-class UUserWidget;
-class UWidget;
 
 /**
  * Swappable navigation/interaction policy that consumes confirm/cancel input and optional ticking.
@@ -21,10 +18,10 @@ class NSUIFRAMEWORK_API UNsUINavigationBehaviour : public UObject
 public:
     /** Owning subsystem set when the behaviour is activated. */
     UFUNCTION(BlueprintPure, Category = "NsUI|Navigation")
-    UNsUISubsystem* GetOwningSubsystem() const { return OwningSubsystem.Get(); }
+    class UNsUISubsystem* GetOwningSubsystem() const { return OwningSubsystem; }
 
     /** Internal hook used by the subsystem to provide context for navigation decisions. */
-    void SetOwningSubsystem(UNsUISubsystem* InSubsystem) { OwningSubsystem = InSubsystem; }
+    void SetOwningSubsystem(class UNsUISubsystem* const InSubsystem) { OwningSubsystem = InSubsystem; }
 
     /** Called when this behavior becomes active. */
     UFUNCTION(BlueprintNativeEvent)
@@ -52,11 +49,11 @@ public:
 
     /** Notified when a widget is pushed onto a layer. Default implementation is a no-op. */
     UFUNCTION(BlueprintNativeEvent)
-    void OnWidgetAdded(UUserWidget* Screen, ENsUILayer Layer);
+    void OnWidgetAdded(class UUserWidget* Screen, ENsUILayer Layer);
 
     /** Notified when a widget is removed from a layer. Default implementation is a no-op. */
     UFUNCTION(BlueprintNativeEvent)
-    void OnWidgetRemoved(ENsUILayer Layer, UUserWidget* Screen);
+    void OnWidgetRemoved(ENsUILayer Layer, class UUserWidget* Screen);
 
     /** Notified when a full layer has been cleared. Default implementation is a no-op. */
     UFUNCTION(BlueprintNativeEvent)
@@ -64,14 +61,15 @@ public:
 
     /** Notified when Slate focus changes to a specific widget. Default implementation is a no-op. */
     UFUNCTION(BlueprintNativeEvent)
-    void OnSlateFocusChanged(UWidget* FocusedWidget);
+    void OnSlateFocusChanged(class UWidget* FocusedWidget);
 
     /** Notified when Slate hover highlights a widget. Default implementation is a no-op. */
     UFUNCTION(BlueprintNativeEvent)
-    void OnSlateHover(UWidget* HoveredWidget);
+    void OnSlateHover(class UWidget* HoveredWidget);
 
 private:
-    /** Owning subsystem (weak to avoid lifetime issues). */
+
+    /** Owning subsystem */
     UPROPERTY()
-    TWeakObjectPtr<UNsUISubsystem> OwningSubsystem;
+    TObjectPtr<class UNsUISubsystem> OwningSubsystem;
 };

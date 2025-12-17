@@ -53,3 +53,26 @@ enum class ENsUIInputSource : uint8
     Mouse
 };
 
+/**
+ * Struct used to gate synthetic keypresses that we do on our subsystem
+ */
+struct FScopedNavConfigRestore
+{
+    /** Slate Application */
+    FSlateApplication& SlateApp;
+
+    /** Navigation Config */
+    TSharedRef<FNavigationConfig> SavedNavConfig;
+
+    /** Constructor */
+    FScopedNavConfigRestore(FSlateApplication& InApp, const TSharedRef<FNavigationConfig>& InSaved)
+        : SlateApp(InApp)
+        , SavedNavConfig(InSaved)
+    {}
+
+    /** Destructor */
+    ~FScopedNavConfigRestore()
+    {
+        SlateApp.SetNavigationConfig(SavedNavConfig);
+    }
+};
