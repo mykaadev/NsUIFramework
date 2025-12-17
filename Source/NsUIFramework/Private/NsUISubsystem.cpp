@@ -6,6 +6,7 @@
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/NavigationConfig.h"
 #include "Framework/Application/SlateApplication.h"
 #include "InputCoreTypes.h"
@@ -24,6 +25,44 @@
 namespace
 {
     TSharedPtr<FNavigationConfig> GOriginalNavigationConfig;
+    TSharedPtr<IInputProcessor> GNavigationInputPreProcessor;
+
+    /** Custom input pre-processor that forwards mouse clicks to NsUI confirm/cancel when active. */
+    class FNsUINavigationInputPreProcessor : public IInputProcessor
+    {
+    public:
+        explicit FNsUINavigationInputPreProcessor(TWeakObjectPtr<UNsUISubsystem> InSubsystem)
+            : Subsystem(InSubsystem)
+        {
+        }
+
+        virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
+        {
+            UNsUISubsystem* Sys = Subsystem.Get();
+            if (!Sys || !Sys->IsFrameworkActive())
+            {
+                return false;
+            }
+
+            const FKey Button = MouseEvent.GetEffectingButton();
+            if (Button == EKeys::LeftMouseButton)
+            {
+                Sys->Confirm();
+                return true;
+            }
+
+            if (Button == EKeys::RightMouseButton)
+            {
+                Sys->Cancel();
+                return true;
+            }
+
+            return false;
+        }
+
+    private:
+        TWeakObjectPtr<UNsUISubsystem> Subsystem;
+    };
 
     /** Custom navigation config that can route nav events into UNsUISubsystem when active. */
     class FNsUINavigationConfig : public FNavigationConfig
@@ -66,33 +105,6 @@ namespace
         virtual EUINavigationAction GetNavigationActionFromKey(const FKeyEvent& InKeyEvent) const override
         {
             const EUINavigationAction Action = WrappedConfig->GetNavigationActionFromKey(InKeyEvent);
-
-            UNsUISubsystem* Sys = Subsystem.Get();
-            if (!Sys || !Sys->IsFrameworkActive())
-            {
-                return Action;
-            }
-
-            switch (Action)
-            {
-            case EUINavigationAction::Accept:
-                Sys->Confirm();
-                return EUINavigationAction::Invalid;
-
-            case EUINavigationAction::Back:
-                Sys->Cancel();
-                return EUINavigationAction::Invalid;
-
-            default:
-                break;
-            }
-
-            return Action;
-        }
-
-        virtual EUINavigationAction GetNavigationActionFromMouseButton(const FPointerEvent& InMouseEvent) const override
-        {
-            const EUINavigationAction Action = WrappedConfig->GetNavigationActionFromMouseButton(InMouseEvent);
 
             UNsUISubsystem* Sys = Subsystem.Get();
             if (!Sys || !Sys->IsFrameworkActive())
@@ -165,6 +177,8 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
     {
         FocusChangedHandle = FSlateApplication::Get().OnFocusChanging().AddUObject(this, &UNsUISubsystem::HandleFocusChanged);
         SlatePreTickHandle = FSlateApplication::Get().OnPreTick().AddUObject(this, &UNsUISubsystem::SyncHoverFocusWithSlate);
+        GNavigationInputPreProcessor = MakeShared<FNsUINavigationInputPreProcessor>(this);
+        FSlateApplication::Get().RegisterInputPreProcessor(GNavigationInputPreProcessor);
 
         if (!GOriginalNavigationConfig.IsValid())
         {
@@ -190,6 +204,12 @@ void UNsUISubsystem::Deinitialize()
     {
         FSlateApplication::Get().OnPreTick().Remove(SlatePreTickHandle);
         SlatePreTickHandle.Reset();
+    }
+
+    if (FSlateApplication::IsInitialized() && GNavigationInputPreProcessor.IsValid())
+    {
+        FSlateApplication::Get().UnregisterInputPreProcessor(GNavigationInputPreProcessor);
+        GNavigationInputPreProcessor.Reset();
     }
 
     if (FSlateApplication::IsInitialized() && GOriginalNavigationConfig.IsValid())
