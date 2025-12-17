@@ -90,6 +90,33 @@ namespace
             return Action;
         }
 
+        virtual EUINavigationAction GetNavigationActionFromMouseButton(const FPointerEvent& InMouseEvent) const override
+        {
+            const EUINavigationAction Action = WrappedConfig->GetNavigationActionFromMouseButton(InMouseEvent);
+
+            UNsUISubsystem* Sys = Subsystem.Get();
+            if (!Sys || !Sys->IsFrameworkActive())
+            {
+                return Action;
+            }
+
+            switch (Action)
+            {
+            case EUINavigationAction::Accept:
+                Sys->Confirm();
+                return EUINavigationAction::Invalid;
+
+            case EUINavigationAction::Back:
+                Sys->Cancel();
+                return EUINavigationAction::Invalid;
+
+            default:
+                break;
+            }
+
+            return Action;
+        }
+
     private:
         TWeakObjectPtr<UNsUISubsystem> Subsystem;
         TSharedRef<FNavigationConfig> WrappedConfig;
