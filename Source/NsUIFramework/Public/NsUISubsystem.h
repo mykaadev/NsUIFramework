@@ -93,6 +93,11 @@ public:
     /** Retrieve the top-most active layer (Modal > Menu > Game). */
     ENsUILayer GetTopActiveLayer() const;
 
+    /** Accessor for current navigation behaviour. */
+    UNsUINavigationBehaviour* GetActiveNavigationBehaviour() const { return ActiveNavigationBehaviour; }
+    /** Expose the last input source for behaviours. */
+    ENsUIInputSource GetLastInputSource() const { return LastInputSource; }
+
     /** Handle Hover Focus */
     void HandleHoverFocus(UWidget* Widget);
 
@@ -135,9 +140,6 @@ private:
     FDelegateHandle FocusChangedHandle;
     FDelegateHandle SlatePreTickHandle;
 
-    /** Reverse lookup from Slate widget to UWidget for hover/focus reconciliation. */
-    TMap<TWeakPtr<SWidget>, TWeakObjectPtr<UWidget>> SlateToWidgetMap;
-
     /** Currently bound navigation behaviour that receives confirm/hover/cancel/tick events. */
     UPROPERTY()
     TObjectPtr<UNsUINavigationBehaviour> ActiveNavigationBehaviour;
@@ -151,11 +153,7 @@ private:
 
     void SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
     TWeakPtr<SWidget> GetSlateFocus() const;
-    UWidget* ResolveWidgetFromSlate(const FWidgetPath& NewPath, const TSharedPtr<SWidget>& NewWidget) const;
-
     void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
-
-    void RegisterWidgetTree(UUserWidget* Root);
     void UpdateCursorVisibility();
     void SyncHoverFocusWithSlate(float InDeltaTime);
 

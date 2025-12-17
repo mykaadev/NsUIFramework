@@ -2,7 +2,6 @@
 #include "NsUISubsystem.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Blueprint/UserWidget.h"
-#include "Blueprint/WidgetTree.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -18,6 +17,7 @@
 #include "NsUILayout.h"
 #include "NsUINavigationBehaviour.h"
 #include "Stats/Stats.h"
+#include "Templates/GuardValue.h"
 #include "Widgets/SWidget.h"
 
 namespace
@@ -50,8 +50,24 @@ namespace
             const FKey Button = MouseEvent.GetEffectingButton();
             if (Button == EKeys::LeftMouseButton)
             {
-                Sys->Confirm();
-                return true;
+                if (UNsUINavigationBehaviour* Behaviour = Sys->GetActiveNavigationBehaviour())
+                {
+                    if (Behaviour->OnMouseButtonDown(MouseEvent.GetScreenSpacePosition(), Button))
+                    {
+                        return true;
+                    }
+                }
+
+                if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(Sys->GetActiveNavigationBehaviour()))
+                {
+                    if (UWidget* TargetWidget = WidgetBehaviour->FindWidgetUnderPointer(MouseEvent.GetScreenSpacePosition()))
+                    {
+                        Sys->HandleHoverFocus(TargetWidget);
+                    }
+                }
+
+                // Let Slate and any other input handlers process the click normally.
+                return false;
             }
 
             return false;
@@ -139,6 +155,7 @@ UNsUISubsystem::UNsUISubsystem()
     : ActiveLayout(nullptr)
     , LastInputSource(ENsUIInputSource::KeyboardGamepad)
     , ActiveNavigationBehaviour(nullptr)
+    , bForwardingSyntheticInputToSlate(false)
 {
     DefaultLayoutClass = UNsUILayout::StaticClass();
 }
@@ -344,7 +361,10 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenCl
 
     LayerWidget->AddScreen(Screen);
     LayerStates.FindOrAdd(Layer).Stack.Add(Screen);
-    RegisterWidgetTree(Screen);
+    if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
+    {
+        WidgetBehaviour->RegisterWidgetTree(Screen);
+    }
 
     if (ActiveNavigationBehaviour)
     {
@@ -473,11 +493,21 @@ void UNsUISubsystem::Cancel()
 
 void UNsUISubsystem::ForwardConfirmToSlate()
 {
+    if (bForwardingSyntheticInputToSlate)
+    {
+        return;
+    }
+
     SendKeyThroughSlate(EKeys::Enter);
 }
 
 void UNsUISubsystem::ForwardCancelToSlate()
 {
+    if (bForwardingSyntheticInputToSlate)
+    {
+        return;
+    }
+
     SendKeyThroughSlate(EKeys::Escape);
 }
 
@@ -591,15 +621,12 @@ void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysSta
         return;
     }
 
-    bForwardingSyntheticInputToSlate = true;
+    TGuardValue<bool> ForwardingGuard(bForwardingSyntheticInputToSlate, true);
     const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : KeyboardUserIndex;
     const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
 
     FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
     FSlateApplication::Get().ProcessKeyUpEvent(KeyEvent);
-    bForwardingSyntheticInputToSlate = false;
-}
-
 TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
 {
     if (!FSlateApplication::IsInitialized())
@@ -610,32 +637,6 @@ TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
     return FSlateApplication::Get().GetUserFocusedWidget(KeyboardUserIndex);
 }
 
-UWidget* UNsUISubsystem::ResolveWidgetFromSlate(const FWidgetPath& NewPath, const TSharedPtr<SWidget>& NewWidget) const
-{
-    // Try the direct widget from OnFocusChanging
-    if (NewWidget.IsValid())
-    {
-        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(NewWidget))
-        {
-            return Found->Get();
-        }
-    }
-
-    // Fallback: climb the path from leaf to root and see
-    //    if any of those Slate widgets are in our map.
-    for (int32 Index = NewPath.Widgets.Num() - 1; Index >= 0; --Index)
-    {
-        const TSharedRef<SWidget>& Candidate = NewPath.Widgets[Index].Widget;
-
-        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(Candidate))
-        {
-            return Found->Get();
-        }
-    }
-
-    return nullptr;
-}
-
 void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)
 {
     if (InFocusEvent.GetCause() == EFocusCause::Mouse)
@@ -644,64 +645,23 @@ void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const F
         UpdateCursorVisibility();
     }
 
-    if (ActiveNavigationBehaviour)
+    if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
     {
-        UWidget* NewFocusedWidget = ResolveWidgetFromSlate(InNewPath, InNewWidget);
-        ActiveNavigationBehaviour->OnSlateFocusChanged(IsValid(NewFocusedWidget) ? NewFocusedWidget : nullptr);
+        UWidget* NewFocusedWidget = WidgetBehaviour->ResolveWidgetFromSlate(InNewPath, InNewWidget);
+        WidgetBehaviour->OnSlateFocusChanged(IsValid(NewFocusedWidget) ? NewFocusedWidget : nullptr);
     }
 }
 
 void UNsUISubsystem::SyncHoverFocusWithSlate(float InDeltaTime)
 {
-    if (LastInputSource != ENsUIInputSource::Mouse || !FSlateApplication::IsInitialized())
+    if (LastInputSource != ENsUIInputSource::Mouse)
     {
         return;
     }
 
-    FSlateApplication& SlateApp = FSlateApplication::Get();
-    const FWidgetPath HoveredPath = SlateApp.LocateWindowUnderMouse(SlateApp.GetCursorPos(), SlateApp.GetInteractiveTopLevelWindows());
-
-    if (!HoveredPath.IsValid())
+    if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
     {
-        return;
-    }
-
-    for (int32 Index = HoveredPath.Widgets.Num() - 1; Index >= 0; --Index)
-    {
-        const TSharedRef<SWidget>& HoveredSlateWidget = HoveredPath.Widgets[Index].Widget;
-
-        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(HoveredSlateWidget))
-        {
-            if (ActiveNavigationBehaviour)
-            {
-                ActiveNavigationBehaviour->OnSlateHover(Found->Get());
-            }
-
-            break;
-        }
-    }
-}
-
-void UNsUISubsystem::RegisterWidgetTree(UUserWidget* Root)
-{
-    if (!Root)
-    {
-        return;
-    }
-
-    TArray<UWidget*> Widgets;
-    Root->WidgetTree->GetAllWidgets(Widgets);
-
-    for (UWidget* Widget : Widgets)
-    {
-        if (!Widget)
-        {
-            continue;
-        }
-
-        // This will cache the Slate widget if it hasn’t been created yet
-        TSharedRef<SWidget> SlateWidget = Widget->TakeWidget();
-        SlateToWidgetMap.Add(SlateWidget, Widget);
+        WidgetBehaviour->SyncHoverFocusWithSlate();
     }
 }
 
