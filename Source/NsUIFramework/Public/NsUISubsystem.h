@@ -104,9 +104,6 @@ public:
     /** Retrieve the top-most widget on a given layer. */
     UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
 
-    /** Is forwarding input */
-    bool IsForwardingSyntheticInputToSlate() const { return bForwardingSyntheticInputToSlate; }
-
 	/** True when a navigation behaviour is bound (meaning NsUI intends to own confirm/cancel/navigation). */
 	bool HasActiveNavigationBehaviour() const;
 
@@ -143,10 +140,6 @@ private:
     /** Currently bound navigation behaviour that receives confirm/hover/cancel/tick events. */
     UPROPERTY()
     TObjectPtr<UNsUINavigationBehaviour> ActiveNavigationBehaviour;
-
-    /** Currently forwarding synthetic input */
-    UPROPERTY()
-    bool bForwardingSyntheticInputToSlate;
 
     void EnsureLayout();
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);

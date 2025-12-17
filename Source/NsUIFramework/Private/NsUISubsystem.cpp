@@ -24,6 +24,12 @@ namespace
 {
     TSharedPtr<FNavigationConfig> GOriginalNavigationConfig;
     TSharedPtr<IInputProcessor> GNavigationInputPreProcessor;
+    bool GForwardingSyntheticInputToSlate = false;
+
+    bool IsForwardingSyntheticInputToSlate()
+    {
+        return GForwardingSyntheticInputToSlate;
+    }
 
     /** Custom input pre-processor that forwards mouse clicks to NsUI confirm/cancel when active. */
     class FNsUINavigationInputPreProcessor : public IInputProcessor
@@ -42,7 +48,7 @@ namespace
         virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
         {
             UNsUISubsystem* Sys = Subsystem.Get();
-            if (!Sys || !Sys->IsFrameworkActive() || Sys->IsForwardingSyntheticInputToSlate())
+            if (!Sys || !Sys->IsFrameworkActive() || IsForwardingSyntheticInputToSlate())
             {
                 return false;
             }
@@ -95,7 +101,7 @@ namespace
             const EUINavigation Direction = WrappedConfig->GetNavigationDirectionFromKey(InKeyEvent);
 
             UNsUISubsystem* Sys = Subsystem.Get();
-            if (!Sys || !Sys->IsFrameworkActive() || Sys->IsForwardingSyntheticInputToSlate())
+            if (!Sys || !Sys->IsFrameworkActive() || IsForwardingSyntheticInputToSlate())
             {
                 // Framework inactive -> behave exactly like the original config.
                 return Direction;
@@ -119,7 +125,7 @@ namespace
             const EUINavigationAction Action = WrappedConfig->GetNavigationActionFromKey(InKeyEvent);
 
             UNsUISubsystem* Sys = Subsystem.Get();
-            if (!Sys || !Sys->IsFrameworkActive() || Sys->IsForwardingSyntheticInputToSlate())
+            if (!Sys || !Sys->IsFrameworkActive() || IsForwardingSyntheticInputToSlate())
             {
                 return Action;
             }
@@ -155,7 +161,6 @@ UNsUISubsystem::UNsUISubsystem()
     : ActiveLayout(nullptr)
     , LastInputSource(ENsUIInputSource::KeyboardGamepad)
     , ActiveNavigationBehaviour(nullptr)
-    , bForwardingSyntheticInputToSlate(false)
 {
     DefaultLayoutClass = UNsUILayout::StaticClass();
 }
@@ -493,7 +498,7 @@ void UNsUISubsystem::Cancel()
 
 void UNsUISubsystem::ForwardConfirmToSlate()
 {
-    if (bForwardingSyntheticInputToSlate)
+    if (IsForwardingSyntheticInputToSlate())
     {
         return;
     }
@@ -503,7 +508,7 @@ void UNsUISubsystem::ForwardConfirmToSlate()
 
 void UNsUISubsystem::ForwardCancelToSlate()
 {
-    if (bForwardingSyntheticInputToSlate)
+    if (IsForwardingSyntheticInputToSlate())
     {
         return;
     }
@@ -616,12 +621,12 @@ void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysSta
     }
 
     // Prevent nested re-entry from stomping the flag back to false mid-call
-    if (bForwardingSyntheticInputToSlate)
+    if (IsForwardingSyntheticInputToSlate())
     {
         return;
     }
 
-    TGuardValue<bool> ForwardingGuard(bForwardingSyntheticInputToSlate, true);
+    TGuardValue<bool> ForwardingGuard(GForwardingSyntheticInputToSlate, true);
     const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : KeyboardUserIndex;
     const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
 
