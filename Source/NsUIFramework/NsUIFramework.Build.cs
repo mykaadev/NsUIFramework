@@ -10,7 +10,8 @@ public class NsUIFramework : ModuleRules
             new string[]
             {
                 "Core",
-                "UMG"
+                "UMG",
+                "DeveloperSettings"
             }
         );
 

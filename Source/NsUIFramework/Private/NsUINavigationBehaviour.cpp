@@ -23,3 +23,8 @@ void UNsUINavigationBehaviour::OnLayerCleared_Implementation(ENsUILayer Layer) {
 void UNsUINavigationBehaviour::OnSlateFocusChanged_Implementation(UWidget* FocusedWidget) {}
 
 void UNsUINavigationBehaviour::OnSlateHover_Implementation(UWidget* HoveredWidget) {}
+
+bool UNsUINavigationBehaviour::OnMouseButtonDown_Implementation(const FVector2D& ScreenSpacePosition, FKey Button)
+{
+    return false;
+}
