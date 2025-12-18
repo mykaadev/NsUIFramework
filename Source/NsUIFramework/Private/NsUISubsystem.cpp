@@ -17,7 +17,6 @@
 #include "NsUISlateInputGuard.h"
 #include "NsUISlateNavigation.h"
 #include "Stats/Stats.h"
-#include "Templates/GuardValue.h"
 #include "Widgets/SWidget.h"
 
 namespace
@@ -137,7 +136,6 @@ void UNsUISubsystem::EnsureLayout()
             ActiveLayout->RemoveFromParent();
             ActiveLayout = nullptr;
             LayerStates.Empty();
-            SlateToWidgetMap.Empty();
         }
     }
 
@@ -503,12 +501,11 @@ void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysSta
         return;
     }
 
-    FNsUISyntheticInputGuard ForwardingGuard;
     const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : KeyboardUserIndex;
     const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
 
+    FNsUISyntheticInputGuard ForwardingGuard; // Scoped guard, this prevents reentries due to the fake slate input we send
     FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
-    FSlateApplication::Get().ProcessKeyUpEvent(KeyEvent);
 }
 
 TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const

@@ -9,8 +9,6 @@ struct FNsUIWidgetLayerState
     TArray<TWeakObjectPtr<UWidget>> FocusHistory;
 };
 
-struct FWidgetPath;
-
 /** Navigation behaviour that owns UMG focus movement and cursor updates. */
 UCLASS(Blueprintable)
 class NSUIFRAMEWORK_API UNsUIWidgetNavigationBehaviour : public UNsUINavigationBehaviour
