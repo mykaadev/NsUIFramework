@@ -53,6 +53,8 @@ namespace
                 return false;
             }
 
+            Sys->NoteMouseInput();
+
             const FKey Button = MouseEvent.GetEffectingButton();
             if (Button == EKeys::LeftMouseButton)
             {
@@ -607,10 +609,15 @@ void UNsUISubsystem::HandleHoverFocus(UWidget* Widget)
 {
     if (ActiveNavigationBehaviour)
     {
-        LastInputSource = ENsUIInputSource::Mouse;
-        UpdateCursorVisibility();
+        NoteMouseInput();
         ActiveNavigationBehaviour->OnSlateHover(Widget);
     }
+}
+
+void UNsUISubsystem::NoteMouseInput()
+{
+    LastInputSource = ENsUIInputSource::Mouse;
+    UpdateCursorVisibility();
 }
 
 void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState)
@@ -632,6 +639,8 @@ void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysSta
 
     FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
     FSlateApplication::Get().ProcessKeyUpEvent(KeyEvent);
+}
+
 TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
 {
     if (!FSlateApplication::IsInitialized())

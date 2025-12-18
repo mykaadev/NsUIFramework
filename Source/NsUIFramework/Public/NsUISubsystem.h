@@ -97,6 +97,8 @@ public:
     UNsUINavigationBehaviour* GetActiveNavigationBehaviour() const { return ActiveNavigationBehaviour; }
     /** Expose the last input source for behaviours. */
     ENsUIInputSource GetLastInputSource() const { return LastInputSource; }
+    /** Mark that mouse input was received (updates cursor visibility rules). */
+    void NoteMouseInput();
 
     /** Handle Hover Focus */
     void HandleHoverFocus(UWidget* Widget);
