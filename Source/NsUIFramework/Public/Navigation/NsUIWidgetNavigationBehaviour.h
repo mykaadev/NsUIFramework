@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NsUINavigationBehaviour.h"
+#include "NsUICancelHandler.h"
 #include "Widgets/SWidget.h"
 #include "NsUIWidgetNavigationBehaviour.generated.h"
 

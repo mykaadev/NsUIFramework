@@ -45,6 +45,22 @@ void UNsUIWidgetNavigationBehaviour::OnCancel_Implementation()
 {
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
+        const ENsUILayer ActiveLayer = Subsystem->GetTopActiveLayer();
+        if (UUserWidget* TopWidget = Subsystem->GetTopWidgetOnLayer(ActiveLayer))
+        {
+            if (TopWidget->GetClass()->ImplementsInterface(UNsUICancelHandler::StaticClass()))
+            {
+                const bool bHandled = INsUICancelHandler::Execute_HandleNsUICancel(TopWidget);
+                if (bHandled)
+                {
+                    return;
+                }
+            }
+
+            Subsystem->PopWidgetFromLayer(ActiveLayer);
+            return;
+        }
+
         Subsystem->ForwardCancelToSlate();
     }
 }
