@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "NsUIFrameworkTypes.h"
+#include "InputCoreTypes.h"
 #include "NsUINavigationBehaviour.generated.h"
 
 
@@ -66,6 +67,10 @@ public:
     /** Notified when Slate hover highlights a widget. Default implementation is a no-op. */
     UFUNCTION(BlueprintNativeEvent)
     void OnSlateHover(class UWidget* HoveredWidget);
+
+    /** Allows a navigation behaviour to handle mouse down events (e.g. actor picking) before NsUI consumes them. Return true to consume. */
+    UFUNCTION(BlueprintNativeEvent)
+    bool OnMouseButtonDown(const FVector2D& ScreenSpacePosition, FKey Button);
 
 private:
 
