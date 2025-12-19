@@ -182,9 +182,10 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
         return;
     }
 
-    const EFocusCause EffectiveFocusCause = FocusCause == EFocusCause::Mouse
-        ? EFocusCause::Mouse
-        : EFocusCause::Navigation;
+    const bool bIsMouseFocus = FocusCause == EFocusCause::Mouse;
+    const bool bIsNavigationInput = FocusCause == EFocusCause::Navigation;
+
+    const EFocusCause EffectiveFocusCause = bIsMouseFocus ? EFocusCause::Mouse : EFocusCause::Navigation;
 
     if (FSlateApplication::IsInitialized())
     {
@@ -192,8 +193,8 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
 
         if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
         {
-            // Programmatic focus shifts are driven by navigation input, so update visibility rules accordingly.
-            if (EffectiveFocusCause != EFocusCause::Mouse)
+            // Only navigation-driven focus changes should switch cursor visibility to keyboard/gamepad mode.
+            if (bIsNavigationInput)
             {
                 Subsystem->NoteKeyboardNavigationInput();
             }
