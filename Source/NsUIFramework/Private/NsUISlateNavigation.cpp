@@ -140,6 +140,11 @@ namespace
 
         virtual EUINavigation GetNavigationDirectionFromKey(const FKeyEvent& InKeyEvent) const override
         {
+            if (InKeyEvent.IsRepeat())
+            {
+                return EUINavigation::Invalid;
+            }
+
             if (const EUINavigation SettingsDirection = DirectionFromKeys(InKeyEvent); SettingsDirection != EUINavigation::Invalid)
             {
                 if (UNsUISubsystem* Sys = Subsystem.Get())
@@ -174,6 +179,11 @@ namespace
 
         virtual EUINavigationAction GetNavigationActionFromKey(const FKeyEvent& InKeyEvent) const override
         {
+            if (InKeyEvent.IsRepeat())
+            {
+                return EUINavigationAction::Invalid;
+            }
+
             if (IsConfirmKey(InKeyEvent))
             {
                 if (UNsUISubsystem* Sys = Subsystem.Get())
