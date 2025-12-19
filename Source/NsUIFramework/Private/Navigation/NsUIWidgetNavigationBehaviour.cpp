@@ -185,7 +185,7 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
     const bool bIsMouseFocus = FocusCause == EFocusCause::Mouse;
     const bool bIsNavigationInput = FocusCause == EFocusCause::Navigation;
 
-    const EFocusCause EffectiveFocusCause = bIsMouseFocus ? EFocusCause::Mouse : EFocusCause::Navigation;
+    const EFocusCause EffectiveFocusCause = bIsMouseFocus ? EFocusCause::Mouse : FocusCause;
 
     if (FSlateApplication::IsInitialized())
     {
