@@ -191,6 +191,9 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
             if (const ULocalPlayer* const LocalPlayer = Subsystem->GetLocalPlayer())
             {
                 FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, FocusCause);
+
+                // Also assign keyboard focus so the widget is visually focused immediately.
+                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, FocusCause);
             }
             else
             {
