@@ -182,10 +182,22 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
         return;
     }
 
-    const bool bIsMouseFocus = FocusCause == EFocusCause::Mouse;
-    const bool bIsNavigationInput = FocusCause == EFocusCause::Navigation;
+    EFocusCause RequestedFocusCause = FocusCause;
 
-    const EFocusCause EffectiveFocusCause = bIsMouseFocus ? EFocusCause::Mouse : FocusCause;
+    // Programmatic focus changes should mirror the last input source so cursor/focus rules stay in sync
+    // (mouse pushes keep the cursor visible, navigation pushes show keyboard focus immediately).
+    if (RequestedFocusCause == EFocusCause::SetDirectly)
+    {
+        if (const UNsUISubsystem* Subsystem = GetOwningSubsystem())
+        {
+            RequestedFocusCause = Subsystem->GetLastInputSource() == ENsUIInputSource::Mouse
+                                       ? EFocusCause::Mouse
+                                       : EFocusCause::Navigation;
+        }
+    }
+
+    const bool bIsMouseFocus = RequestedFocusCause == EFocusCause::Mouse;
+    const bool bIsNavigationInput = RequestedFocusCause == EFocusCause::Navigation;
 
     if (FSlateApplication::IsInitialized())
     {
@@ -201,14 +213,14 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
 
             if (const ULocalPlayer* const LocalPlayer = Subsystem->GetLocalPlayer())
             {
-                FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, EffectiveFocusCause);
+                FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, RequestedFocusCause);
 
                 // Also assign keyboard focus so the widget is visually focused immediately.
-                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, EffectiveFocusCause);
+                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, RequestedFocusCause);
             }
             else
             {
-                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, EffectiveFocusCause);
+                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, RequestedFocusCause);
             }
         }
     }
