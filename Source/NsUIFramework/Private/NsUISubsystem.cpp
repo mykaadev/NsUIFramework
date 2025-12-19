@@ -17,7 +17,6 @@
 #include "NsUISlateInputGuard.h"
 #include "NsUISlateNavigation.h"
 #include "Stats/Stats.h"
-#include "Templates/GuardValue.h"
 #include "Widgets/SWidget.h"
 
 static TSharedPtr<FNavigationConfig> GOriginalNavigationConfig;
@@ -131,7 +130,6 @@ void UNsUISubsystem::EnsureLayout()
             ActiveLayout->RemoveFromParent();
             ActiveLayout = nullptr;
             LayerStates.Empty();
-            SlateToWidgetMap.Empty();
         }
     }
 
@@ -498,7 +496,7 @@ void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysSta
     }
 
     FNsUISyntheticInputGuard ForwardingGuard;
-    const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : KeyboardUserIndex;
+    const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : 0;
     const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
 
     FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
@@ -512,7 +510,7 @@ TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
         return TWeakPtr<SWidget>();
     }
 
-    return FSlateApplication::Get().GetUserFocusedWidget(KeyboardUserIndex);
+    return FSlateApplication::Get().GetUserFocusedWidget(0);
 }
 
 void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)

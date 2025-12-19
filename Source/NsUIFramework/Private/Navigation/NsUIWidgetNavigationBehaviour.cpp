@@ -6,6 +6,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "InputCoreTypes.h"
 #include "Math/NumericLimits.h"
+#include "NsUIInputHandler.h"
 #include "NsUISubsystem.h"
 #include "NsUIWidget.h"
 #include "Widgets/SWidget.h"

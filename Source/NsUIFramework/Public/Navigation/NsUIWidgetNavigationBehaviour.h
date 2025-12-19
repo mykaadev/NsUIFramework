@@ -1,7 +1,6 @@
 #pragma once
 
 #include "NsUINavigationBehaviour.h"
-#include "NsUIInputHandler.h"
 #include "Widgets/SWidget.h"
 #include "NsUIWidgetNavigationBehaviour.generated.h"
 
@@ -9,8 +8,6 @@ struct FNsUIWidgetLayerState
 {
     TArray<TWeakObjectPtr<UWidget>> FocusHistory;
 };
-
-struct FWidgetPath;
 
 /** Navigation behaviour that owns UMG focus movement and cursor updates. */
 UCLASS(Blueprintable)

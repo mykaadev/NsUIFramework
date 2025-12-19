@@ -63,67 +63,6 @@ public:
     }
 };
 
-class FNsUINavigationInputPreProcessor : public IInputProcessor
-{
-public:
-    explicit FNsUINavigationInputPreProcessor(TWeakObjectPtr<UNsUISubsystem> InSubsystem)
-        : Subsystem(InSubsystem)
-    {
-    }
-
-    virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override
-    {
-        // No-op (we only care about mouse button events)
-    }
-
-    virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
-    {
-        UNsUISubsystem* Sys = Subsystem.Get();
-        if (!Sys || !Sys->IsFrameworkActive() || IsForwardingSyntheticInputToSlate())
-        {
-            return false;
-        }
-
-        Sys->NoteMouseInput();
-
-        const FKey Button = MouseEvent.GetEffectingButton();
-        const UNsUIDeveloperSettings* Settings = FNsUINavigationHelpers::GetSettings();
-        const bool bIsConfirmMouse = Settings && Settings->ConfirmMouseButtons.Contains(Button);
-        if (bIsConfirmMouse)
-        {
-            if (UNsUINavigationBehaviour* Behaviour = Sys->GetActiveNavigationBehaviour())
-            {
-                if (Behaviour->OnMouseButtonDown(MouseEvent.GetScreenSpacePosition(), Button))
-                {
-                    return true;
-                }
-            }
-
-            if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(Sys->GetActiveNavigationBehaviour()))
-            {
-                if (UWidget* TargetWidget = WidgetBehaviour->FindWidgetUnderPointer(MouseEvent.GetScreenSpacePosition()))
-                {
-                    Sys->HandleHoverFocus(TargetWidget);
-                }
-            }
-
-            // Let Slate and any other input handlers process the click normally.
-            return false;
-        }
-
-        return false;
-    }
-
-    virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
-    {
-        FNsUINavigationConfig::MarkKeyReleased(InKeyEvent.GetKey());
-        return false;
-    }
-
-private:
-    TWeakObjectPtr<UNsUISubsystem> Subsystem;
-};
-
 /** Custom navigation config that can route nav events into UNsUISubsystem when active. */
 class FNsUINavigationConfig : public FNavigationConfig
 {
@@ -235,22 +174,23 @@ public:
 
         switch (Action)
         {
-        case EUINavigationAction::Accept:
-            Sys->Confirm();
-            return EUINavigationAction::Invalid;
+            case EUINavigationAction::Accept:
+                Sys->Confirm();
+                MarkKeyHandled(InKeyEvent.GetKey());
+                return EUINavigationAction::Invalid;
 
-        case EUINavigationAction::Back:
-            Sys->Cancel();
-            return EUINavigationAction::Invalid;
+            case EUINavigationAction::Back:
+                Sys->Cancel();
+                MarkKeyHandled(InKeyEvent.GetKey());
+                return EUINavigationAction::Invalid;
 
-        default:
-            break;
+            default:
+                break;
         }
 
         return Action;
     }
 
-private:
     static bool WasKeyHandled(const FKey& Key);
     static void MarkKeyHandled(const FKey& Key);
     static void MarkKeyReleased(const FKey& Key);
@@ -301,6 +241,67 @@ void FNsUINavigationConfig::MarkKeyReleased(const FKey& Key)
         KeysPendingRelease.Remove(Key);
     }
 }
+
+class FNsUINavigationInputPreProcessor : public IInputProcessor
+{
+public:
+    explicit FNsUINavigationInputPreProcessor(TWeakObjectPtr<UNsUISubsystem> InSubsystem)
+        : Subsystem(InSubsystem)
+    {
+    }
+
+    virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override
+    {
+        // No-op (we only care about mouse button events)
+    }
+
+    virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
+    {
+        UNsUISubsystem* Sys = Subsystem.Get();
+        if (!Sys || !Sys->IsFrameworkActive() || IsForwardingSyntheticInputToSlate())
+        {
+            return false;
+        }
+
+        Sys->NoteMouseInput();
+
+        const FKey Button = MouseEvent.GetEffectingButton();
+        const UNsUIDeveloperSettings* Settings = FNsUINavigationHelpers::GetSettings();
+        const bool bIsConfirmMouse = Settings && Settings->ConfirmMouseButtons.Contains(Button);
+        if (bIsConfirmMouse)
+        {
+            if (UNsUINavigationBehaviour* Behaviour = Sys->GetActiveNavigationBehaviour())
+            {
+                if (Behaviour->OnMouseButtonDown(MouseEvent.GetScreenSpacePosition(), Button))
+                {
+                    return true;
+                }
+            }
+
+            if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(Sys->GetActiveNavigationBehaviour()))
+            {
+                if (UWidget* TargetWidget = WidgetBehaviour->FindWidgetUnderPointer(MouseEvent.GetScreenSpacePosition()))
+                {
+                    Sys->HandleHoverFocus(TargetWidget);
+                }
+            }
+
+            // Let Slate and any other input handlers process the click normally.
+            return false;
+        }
+
+        return false;
+    }
+
+    virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
+    {
+        FNsUINavigationConfig::MarkKeyReleased(InKeyEvent.GetKey());
+        return false;
+    }
+
+private:
+    TWeakObjectPtr<UNsUISubsystem> Subsystem;
+};
 
 TSharedPtr<IInputProcessor> CreateNsUINavigationInputPreProcessor(UNsUISubsystem* Subsystem)
 {
