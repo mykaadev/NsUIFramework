@@ -182,6 +182,10 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
         return;
     }
 
+    const EFocusCause EffectiveFocusCause = FocusCause == EFocusCause::Mouse
+        ? EFocusCause::Mouse
+        : EFocusCause::Navigation;
+
     if (FSlateApplication::IsInitialized())
     {
         const TSharedRef<SWidget> SlateWidget = Widget->TakeWidget();
@@ -189,18 +193,21 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
         if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
         {
             // Programmatic focus shifts are driven by navigation input, so update visibility rules accordingly.
-            Subsystem->NoteKeyboardNavigationInput();
+            if (EffectiveFocusCause != EFocusCause::Mouse)
+            {
+                Subsystem->NoteKeyboardNavigationInput();
+            }
 
             if (const ULocalPlayer* const LocalPlayer = Subsystem->GetLocalPlayer())
             {
-                FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, FocusCause);
+                FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, EffectiveFocusCause);
 
                 // Also assign keyboard focus so the widget is visually focused immediately.
-                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, FocusCause);
+                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, EffectiveFocusCause);
             }
             else
             {
-                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, FocusCause);
+                FSlateApplication::Get().SetKeyboardFocus(SlateWidget, EffectiveFocusCause);
             }
         }
     }
