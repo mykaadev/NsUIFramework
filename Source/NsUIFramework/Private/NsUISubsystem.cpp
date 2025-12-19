@@ -542,25 +542,7 @@ void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const F
 
 void UNsUISubsystem::OnSlatePreTick(float InDeltaTime)
 {
-    ProcessPendingCursorUpdate();
     SyncHoverFocusWithSlate(InDeltaTime);
-}
-
-void UNsUISubsystem::ProcessPendingCursorUpdate()
-{
-    if (!ActiveLayout || !PendingCursorWidget.IsValid())
-    {
-        return;
-    }
-
-    if (!PendingCursorWidget->GetCachedWidget().IsValid())
-    {
-        return;
-    }
-
-    const FVector2D ScreenPosition = GetWidgetScreenPosition(PendingCursorWidget.Get());
-    ActiveLayout->UpdateCursorPosition(ScreenPosition);
-    PendingCursorWidget.Reset();
 }
 
 void UNsUISubsystem::SyncHoverFocusWithSlate(float InDeltaTime)
@@ -705,14 +687,19 @@ void UNsUISubsystem::UpdateLayerHittestability()
 
 void UNsUISubsystem::UpdateCursorToWidget(UWidget* Widget)
 {
-    if (!Widget)
+    if (!ActiveLayout || !Widget)
     {
-        PendingCursorWidget.Reset();
         return;
     }
 
-    PendingCursorWidget = Widget;
-    ProcessPendingCursorUpdate();
+    // Skip updates until the widget has an active Slate instance to measure
+    if (!Widget->GetCachedWidget().IsValid())
+    {
+        return;
+    }
+
+    const FVector2D ScreenPosition = GetWidgetScreenPosition(Widget);
+    ActiveLayout->UpdateCursorPosition(ScreenPosition);
 }
 
 void UNsUISubsystem::UpdateCursorToActor(AActor* Actor)
