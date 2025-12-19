@@ -20,10 +20,26 @@ void UNsUIWidgetNavigationBehaviour::OnExit_Implementation()
 {
     CurrentWidgetFocus = nullptr;
     LayerStates.Empty();
+    SlateToWidgetMap.Empty();
+}
+
+void UNsUIWidgetNavigationBehaviour::OnTick_Implementation(float DeltaTime)
+{
+    SyncHoverFocusWithSlate();
 }
 
 void UNsUIWidgetNavigationBehaviour::OnNavigate_Implementation(EUINavigation Direction)
 {
+    if (CurrentWidgetFocus.IsValid() &&
+        CurrentWidgetFocus->GetClass()->ImplementsInterface(UNsUIInputHandler::StaticClass()))
+    {
+        const bool bHandled = INsUIInputHandler::Execute_HandleNsUINavigate(CurrentWidgetFocus.Get(), Direction);
+        if (bHandled)
+        {
+            return;
+        }
+    }
+
     MoveFocusWithFallback(Direction);
 }
 
@@ -31,6 +47,16 @@ void UNsUIWidgetNavigationBehaviour::OnConfirm_Implementation()
 {
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
+        if (CurrentWidgetFocus.IsValid() &&
+            CurrentWidgetFocus->GetClass()->ImplementsInterface(UNsUIInputHandler::StaticClass()))
+        {
+            const bool bHandled = INsUIInputHandler::Execute_HandleNsUIConfirm(CurrentWidgetFocus.Get());
+            if (bHandled)
+            {
+                return;
+            }
+        }
+
         Subsystem->ForwardConfirmToSlate();
     }
 }
@@ -39,6 +65,23 @@ void UNsUIWidgetNavigationBehaviour::OnCancel_Implementation()
 {
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
+        if (CurrentWidgetFocus.IsValid() &&
+            CurrentWidgetFocus->GetClass()->ImplementsInterface(UNsUIInputHandler::StaticClass()))
+        {
+            const bool bHandled = INsUIInputHandler::Execute_HandleNsUICancel(CurrentWidgetFocus.Get());
+            if (bHandled)
+            {
+                return;
+            }
+        }
+
+        const ENsUILayer ActiveLayer = Subsystem->GetTopActiveLayer();
+        if (UUserWidget* TopWidget = Subsystem->GetTopWidgetOnLayer(ActiveLayer))
+        {
+            Subsystem->PopWidgetFromLayer(ActiveLayer);
+            return;
+        }
+
         Subsystem->ForwardCancelToSlate();
     }
 }
@@ -49,6 +92,8 @@ void UNsUIWidgetNavigationBehaviour::OnWidgetAdded_Implementation(UUserWidget* S
     {
         return;
     }
+
+    RegisterWidgetTree(Screen);
 
     FNsUIWidgetLayerState& State = LayerStates.FindOrAdd(Layer);
 
@@ -158,6 +203,108 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
         Subsystem->UpdateCursorToWidget(Widget);
+    }
+}
+
+void UNsUIWidgetNavigationBehaviour::RegisterWidgetTree(UUserWidget* Root)
+{
+    if (!Root)
+    {
+        return;
+    }
+
+    TArray<UWidget*> Widgets;
+    Root->WidgetTree->GetAllWidgets(Widgets);
+
+    for (UWidget* Widget : Widgets)
+    {
+        if (!Widget)
+        {
+            continue;
+        }
+
+        // This will cache the Slate widget if it hasn’t been created yet
+        TSharedRef<SWidget> SlateWidget = Widget->TakeWidget();
+        SlateToWidgetMap.Add(SlateWidget, Widget);
+    }
+}
+
+UWidget* UNsUIWidgetNavigationBehaviour::ResolveWidgetFromSlate(const FWidgetPath& NewPath, const TSharedPtr<SWidget>& NewWidget) const
+{
+    // Try the direct widget from OnFocusChanging
+    if (NewWidget.IsValid())
+    {
+        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(NewWidget))
+        {
+            return Found->Get();
+        }
+    }
+
+    // Fallback: climb the path from leaf to root and see
+    //    if any of those Slate widgets are in our map.
+    for (int32 Index = NewPath.Widgets.Num() - 1; Index >= 0; --Index)
+    {
+        const TSharedRef<SWidget>& Candidate = NewPath.Widgets[Index].Widget;
+
+        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(Candidate))
+        {
+            return Found->Get();
+        }
+    }
+
+    return nullptr;
+}
+
+UWidget* UNsUIWidgetNavigationBehaviour::FindWidgetUnderPointer(const FVector2D& ScreenSpacePosition) const
+{
+    if (!FSlateApplication::IsInitialized())
+    {
+        return nullptr;
+    }
+
+    FSlateApplication& SlateApp = FSlateApplication::Get();
+    const FWidgetPath HoveredPath = SlateApp.LocateWindowUnderMouse(ScreenSpacePosition, SlateApp.GetInteractiveTopLevelWindows());
+    if (!HoveredPath.IsValid())
+    {
+        return nullptr;
+    }
+
+    const TSharedPtr<SWidget> HoveredSlateWidget = HoveredPath.Widgets.Last().Widget;
+    return ResolveWidgetFromSlate(HoveredPath, HoveredSlateWidget);
+}
+
+void UNsUIWidgetNavigationBehaviour::SyncHoverFocusWithSlate()
+{
+    if (!FSlateApplication::IsInitialized())
+    {
+        return;
+    }
+
+    if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
+    {
+        if (Subsystem->GetLastInputSource() != ENsUIInputSource::Mouse)
+        {
+            return;
+        }
+    }
+
+    FSlateApplication& SlateApp = FSlateApplication::Get();
+    const FWidgetPath HoveredPath = SlateApp.LocateWindowUnderMouse(SlateApp.GetCursorPos(), SlateApp.GetInteractiveTopLevelWindows());
+
+    if (!HoveredPath.IsValid())
+    {
+        return;
+    }
+
+    for (int32 Index = HoveredPath.Widgets.Num() - 1; Index >= 0; --Index)
+    {
+        const TSharedRef<SWidget>& HoveredSlateWidget = HoveredPath.Widgets[Index].Widget;
+
+        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(HoveredSlateWidget))
+        {
+            OnSlateHover(Found->Get());
+            break;
+        }
     }
 }
 
