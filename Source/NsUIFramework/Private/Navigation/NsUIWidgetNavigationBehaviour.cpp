@@ -186,8 +186,11 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
     {
         const TSharedRef<SWidget> SlateWidget = Widget->TakeWidget();
 
-        if (const UNsUISubsystem* Subsystem = GetOwningSubsystem())
+        if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
         {
+            // Programmatic focus shifts are driven by navigation input, so update visibility rules accordingly.
+            Subsystem->NoteKeyboardNavigationInput();
+
             if (const ULocalPlayer* const LocalPlayer = Subsystem->GetLocalPlayer())
             {
                 FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, FocusCause);

@@ -99,6 +99,8 @@ public:
     ENsUIInputSource GetLastInputSource() const { return LastInputSource; }
     /** Mark that mouse input was received (updates cursor visibility rules). */
     void NoteMouseInput();
+    /** Mark that navigation-style input was received so focus/cursor rules reflect keyboard/gamepad use. */
+    void NoteKeyboardNavigationInput();
 
     /** Handle Hover Focus */
     void HandleHoverFocus(UWidget* Widget);

@@ -488,6 +488,12 @@ void UNsUISubsystem::NoteMouseInput()
     UpdateCursorVisibility();
 }
 
+void UNsUISubsystem::NoteKeyboardNavigationInput()
+{
+    LastInputSource = ENsUIInputSource::KeyboardGamepad;
+    UpdateCursorVisibility();
+}
+
 void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState)
 {
     if (!Key.IsValid() || !FSlateApplication::IsInitialized())
