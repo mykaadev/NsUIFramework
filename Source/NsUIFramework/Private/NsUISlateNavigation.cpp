@@ -67,20 +67,42 @@ namespace
     }
 
     TSet<FKey> GHandledKeys;
+    TSet<FKey> GKeysPendingRelease;
 
     bool WasKeyHandled(const FKey& Key)
     {
-        return GHandledKeys.Contains(Key);
+        if (GHandledKeys.Contains(Key))
+        {
+            if (GKeysPendingRelease.Contains(Key))
+            {
+                GHandledKeys.Remove(Key);
+                GKeysPendingRelease.Remove(Key);
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     void MarkKeyHandled(const FKey& Key)
     {
         GHandledKeys.Add(Key);
+        GKeysPendingRelease.Remove(Key);
     }
 
-    void ReleaseHandledKey(const FKey& Key)
+    void MarkKeyReleased(const FKey& Key)
     {
-        GHandledKeys.Remove(Key);
+        if (GHandledKeys.Contains(Key))
+        {
+            // Defer the release until after the current Slate key-up processing completes so the
+            // navigation config does not re-trigger the mapped action for the same key.
+            GKeysPendingRelease.Add(Key);
+        }
+        else
+        {
+            GKeysPendingRelease.Remove(Key);
+        }
     }
 
     // Slate treats user index 0 as the default keyboard/gamepad user; keep constant local for clarity.
@@ -140,7 +162,7 @@ namespace
 
         virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
         {
-            ReleaseHandledKey(InKeyEvent.GetKey());
+            MarkKeyReleased(InKeyEvent.GetKey());
             return false;
         }
 
