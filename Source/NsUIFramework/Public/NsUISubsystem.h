@@ -151,6 +151,7 @@ private:
     void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
     void UpdateCursorVisibility();
     void SyncHoverFocusWithSlate(float InDeltaTime);
+    void UpdateLayerHittestability();
 
 #if WITH_EDITOR
     void RefreshDebugOverlay();

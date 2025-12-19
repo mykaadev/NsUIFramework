@@ -163,6 +163,7 @@ void UNsUISubsystem::EnsureLayout()
             SetNavigationBehaviour(NewObject<UNsUIWidgetNavigationBehaviour>(this));
         }
 
+        UpdateLayerHittestability();
         UpdateCursorVisibility();
         return;
     }
@@ -181,6 +182,8 @@ void UNsUISubsystem::EnsureLayout()
             State.LayerWidget = ActiveLayout->GetLayerWidget(Layer);
         }
     }
+
+    UpdateLayerHittestability();
 }
 
 UNsUILayer* UNsUISubsystem::GetOrCreateLayerWidget(ENsUILayer Layer)
@@ -240,6 +243,7 @@ UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenCl
         ActiveNavigationBehaviour->OnWidgetAdded(Screen, Layer);
     }
 
+    UpdateLayerHittestability();
     UpdateCursorVisibility();
 
 #if WITH_EDITOR
@@ -285,6 +289,7 @@ void UNsUISubsystem::PopWidgetFromLayer(ENsUILayer Layer)
     {
         ActiveNavigationBehaviour->OnWidgetRemoved(Layer, RemovedWidget);
     }
+    UpdateLayerHittestability();
     UpdateCursorVisibility();
 
 #if WITH_EDITOR
@@ -314,6 +319,7 @@ void UNsUISubsystem::PopAllWidgetsFromLayer(ENsUILayer Layer)
         ActiveNavigationBehaviour->OnLayerCleared(Layer);
     }
 
+    UpdateLayerHittestability();
     UpdateCursorVisibility();
 
 #if WITH_EDITOR
@@ -636,6 +642,36 @@ UUserWidget* UNsUISubsystem::GetTopWidgetOnLayer(ENsUILayer Layer) const
     }
 
     return nullptr;
+}
+
+void UNsUISubsystem::UpdateLayerHittestability()
+{
+    const ENsUILayer TopLayer = GetTopActiveLayer();
+
+    for (TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
+    {
+        UNsUILayer* LayerWidget = Pair.Value.LayerWidget.Get();
+        if (!LayerWidget)
+        {
+            continue;
+        }
+
+        UBorder* RootPanel = LayerWidget->GetRootPanel();
+        if (!RootPanel)
+        {
+            continue;
+        }
+
+        const bool bHasWidgets = Pair.Value.Stack.Num() > 0;
+        if (!bHasWidgets)
+        {
+            RootPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+            continue;
+        }
+
+        const bool bIsTopLayer = Pair.Key == TopLayer;
+        RootPanel->SetVisibility(bIsTopLayer ? ESlateVisibility::Visible : ESlateVisibility::SelfHitTestInvisible);
+    }
 }
 
 void UNsUISubsystem::UpdateCursorToWidget(UWidget* Widget)
