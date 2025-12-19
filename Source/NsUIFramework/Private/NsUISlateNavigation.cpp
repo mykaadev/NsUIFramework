@@ -66,6 +66,23 @@ namespace
         return Settings && KeyMatches(InKeyEvent, Settings->CancelKeys);
     }
 
+    TSet<FKey> GHandledKeys;
+
+    bool WasKeyHandled(const FKey& Key)
+    {
+        return GHandledKeys.Contains(Key);
+    }
+
+    void MarkKeyHandled(const FKey& Key)
+    {
+        GHandledKeys.Add(Key);
+    }
+
+    void ReleaseHandledKey(const FKey& Key)
+    {
+        GHandledKeys.Remove(Key);
+    }
+
     // Slate treats user index 0 as the default keyboard/gamepad user; keep constant local for clarity.
     constexpr int32 KeyboardUserIndex = 0;
 
@@ -121,6 +138,12 @@ namespace
             return false;
         }
 
+        virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
+        {
+            ReleaseHandledKey(InKeyEvent.GetKey());
+            return false;
+        }
+
     private:
         TWeakObjectPtr<UNsUISubsystem> Subsystem;
     };
@@ -145,6 +168,11 @@ namespace
                 return EUINavigation::Invalid;
             }
 
+            if (WasKeyHandled(InKeyEvent.GetKey()))
+            {
+                return EUINavigation::Invalid;
+            }
+
             if (const EUINavigation SettingsDirection = DirectionFromKeys(InKeyEvent); SettingsDirection != EUINavigation::Invalid)
             {
                 if (UNsUISubsystem* Sys = Subsystem.Get())
@@ -152,6 +180,7 @@ namespace
                     Sys->Navigate(SettingsDirection);
                 }
 
+                MarkKeyHandled(InKeyEvent.GetKey());
                 return EUINavigation::Invalid;
             }
 
@@ -168,6 +197,7 @@ namespace
             {
                 Sys->Navigate(Direction);
                 // Returning Invalid here tells Slate "we handled the nav; don't do built-in focus move".
+                MarkKeyHandled(InKeyEvent.GetKey());
                 return EUINavigation::Invalid;
             }
 
@@ -184,12 +214,18 @@ namespace
                 return EUINavigationAction::Invalid;
             }
 
+            if (WasKeyHandled(InKeyEvent.GetKey()))
+            {
+                return EUINavigationAction::Invalid;
+            }
+
             if (IsConfirmKey(InKeyEvent))
             {
                 if (UNsUISubsystem* Sys = Subsystem.Get())
                 {
                     Sys->Confirm();
                 }
+                MarkKeyHandled(InKeyEvent.GetKey());
                 return EUINavigationAction::Invalid;
             }
 
@@ -199,6 +235,7 @@ namespace
                 {
                     Sys->Cancel();
                 }
+                MarkKeyHandled(InKeyEvent.GetKey());
                 return EUINavigationAction::Invalid;
             }
 
