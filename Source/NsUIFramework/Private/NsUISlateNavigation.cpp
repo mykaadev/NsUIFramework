@@ -185,6 +185,11 @@ namespace
 
         virtual EUINavigation GetNavigationDirectionFromKey(const FKeyEvent& InKeyEvent) const override
         {
+            if (IsForwardingSyntheticInputToSlate())
+            {
+                return WrappedConfig->GetNavigationDirectionFromKey(InKeyEvent);
+            }
+
             if (InKeyEvent.IsRepeat())
             {
                 return EUINavigation::Invalid;
@@ -231,6 +236,11 @@ namespace
 
         virtual EUINavigationAction GetNavigationActionFromKey(const FKeyEvent& InKeyEvent) const override
         {
+            if (IsForwardingSyntheticInputToSlate())
+            {
+                return WrappedConfig->GetNavigationActionFromKey(InKeyEvent);
+            }
+
             if (InKeyEvent.IsRepeat())
             {
                 return EUINavigationAction::Invalid;
