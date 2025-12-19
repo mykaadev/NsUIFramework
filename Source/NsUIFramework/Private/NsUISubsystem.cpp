@@ -59,7 +59,7 @@ void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
     if (FSlateApplication::IsInitialized())
     {
         FocusChangedHandle = FSlateApplication::Get().OnFocusChanging().AddUObject(this, &UNsUISubsystem::HandleFocusChanged);
-        SlatePreTickHandle = FSlateApplication::Get().OnPreTick().AddUObject(this, &UNsUISubsystem::SyncHoverFocusWithSlate);
+        SlatePreTickHandle = FSlateApplication::Get().OnPreTick().AddUObject(this, &UNsUISubsystem::OnSlatePreTick);
         GNavigationInputPreProcessor = CreateNsUINavigationInputPreProcessor(this);
         FSlateApplication::Get().RegisterInputPreProcessor(GNavigationInputPreProcessor);
 
@@ -540,6 +540,29 @@ void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const F
     }
 }
 
+void UNsUISubsystem::OnSlatePreTick(float InDeltaTime)
+{
+    ProcessPendingCursorUpdate();
+    SyncHoverFocusWithSlate(InDeltaTime);
+}
+
+void UNsUISubsystem::ProcessPendingCursorUpdate()
+{
+    if (!ActiveLayout || !PendingCursorWidget.IsValid())
+    {
+        return;
+    }
+
+    if (!PendingCursorWidget->GetCachedWidget().IsValid())
+    {
+        return;
+    }
+
+    const FVector2D ScreenPosition = GetWidgetScreenPosition(PendingCursorWidget.Get());
+    ActiveLayout->UpdateCursorPosition(ScreenPosition);
+    PendingCursorWidget.Reset();
+}
+
 void UNsUISubsystem::SyncHoverFocusWithSlate(float InDeltaTime)
 {
     if (LastInputSource != ENsUIInputSource::Mouse)
@@ -682,13 +705,14 @@ void UNsUISubsystem::UpdateLayerHittestability()
 
 void UNsUISubsystem::UpdateCursorToWidget(UWidget* Widget)
 {
-    if (!ActiveLayout || !Widget)
+    if (!Widget)
     {
+        PendingCursorWidget.Reset();
         return;
     }
 
-    const FVector2D ScreenPosition = GetWidgetScreenPosition(Widget);
-    ActiveLayout->UpdateCursorPosition(ScreenPosition);
+    PendingCursorWidget = Widget;
+    ProcessPendingCursorUpdate();
 }
 
 void UNsUISubsystem::UpdateCursorToActor(AActor* Actor)

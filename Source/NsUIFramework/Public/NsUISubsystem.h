@@ -140,6 +140,8 @@ private:
     /** Handles for Slate focus/tick delegates. */
     FDelegateHandle FocusChangedHandle;
     FDelegateHandle SlatePreTickHandle;
+    /** Cursor update queued for the next Slate tick to allow widgets to finish constructing. */
+    TWeakObjectPtr<UWidget> PendingCursorWidget;
 
     /** Currently bound navigation behaviour that receives confirm/hover/cancel/tick events. */
     UPROPERTY()
@@ -153,6 +155,8 @@ private:
     void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
     void UpdateCursorVisibility();
     void SyncHoverFocusWithSlate(float InDeltaTime);
+    void OnSlatePreTick(float InDeltaTime);
+    void ProcessPendingCursorUpdate();
     void UpdateLayerHittestability();
 
 #if WITH_EDITOR
