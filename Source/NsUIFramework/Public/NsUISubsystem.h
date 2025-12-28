@@ -106,14 +106,6 @@ public:
 	bool HasActiveNavigationBehaviour() const;
 
 private:
-    enum class ENsUICursorTargetType
-    {
-        None,
-        Widget,
-        Actor,
-        Location
-    };
-
     /** Internal representation of a single layer's widget stack and focus history. */
     struct FNsUILayerState
     {
@@ -144,23 +136,6 @@ private:
     /** Currently bound navigation behaviour that receives confirm/hover/cancel/tick events. */
     UPROPERTY()
     TObjectPtr<UNsUINavigationBehaviour> ActiveNavigationBehaviour;
-
-    /** Cached position the cursor is moving toward. */
-    FVector2D CursorTargetPosition;
-    /** Current cursor position for interpolation. */
-    FVector2D CurrentCursorPosition;
-    /** Current cursor target type. */
-    ENsUICursorTargetType CursorTargetType = ENsUICursorTargetType::None;
-    /** Widget driving the cursor position. */
-    TWeakObjectPtr<UWidget> CursorTargetWidget;
-    /** Actor driving the cursor position. */
-    TWeakObjectPtr<AActor> CursorTargetActor;
-    /** World-space point driving the cursor position. */
-    FVector CursorTargetWorldLocation;
-    /** True once the cursor has been positioned at least once. */
-    bool bCursorHasPosition = false;
-    /** Speed multiplier controlling cursor interpolation. */
-    float CursorLerpSpeed = 10.f;
 
     void EnsureLayout();
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);

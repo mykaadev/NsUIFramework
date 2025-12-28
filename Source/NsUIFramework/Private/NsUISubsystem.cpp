@@ -11,6 +11,7 @@
 #include "Math/NumericLimits.h"
 #include "Navigation/NsUIWidgetNavigationBehaviour.h"
 #include "NsUIDebugOverlay.h"
+#include "NsUICursor.h"
 #include "NsUILayer.h"
 #include "NsUILayout.h"
 #include "NsUINavigationBehaviour.h"
@@ -380,77 +381,6 @@ void UNsUISubsystem::Tick(float DeltaTime)
 {
     UpdateCursorVisibility();
 
-    bool bHasTarget = CursorTargetType != ENsUICursorTargetType::None;
-    FVector2D DesiredPosition = CursorTargetPosition;
-    bool bResolvedTarget = false;
-
-    if (ActiveLayout && bHasTarget)
-    {
-        switch (CursorTargetType)
-        {
-        case ENsUICursorTargetType::Widget:
-            if (CursorTargetWidget.IsValid() && CursorTargetWidget->GetCachedWidget().IsValid())
-            {
-                DesiredPosition = GetWidgetScreenPosition(CursorTargetWidget.Get());
-                CursorTargetPosition = DesiredPosition;
-                bResolvedTarget = true;
-            }
-            else
-            {
-                CursorTargetType = ENsUICursorTargetType::None;
-                CursorTargetWidget.Reset();
-                bHasTarget = false;
-            }
-            break;
-        case ENsUICursorTargetType::Actor:
-            if (CursorTargetActor.IsValid())
-            {
-                DesiredPosition = GetActorScreenPosition(CursorTargetActor.Get());
-                CursorTargetPosition = DesiredPosition;
-                bResolvedTarget = true;
-            }
-            else
-            {
-                CursorTargetType = ENsUICursorTargetType::None;
-                CursorTargetActor.Reset();
-                bHasTarget = false;
-            }
-            break;
-        case ENsUICursorTargetType::Location:
-            DesiredPosition = GetLocationScreenPosition(CursorTargetWorldLocation);
-            CursorTargetPosition = DesiredPosition;
-            bResolvedTarget = true;
-            break;
-        default:
-            break;
-        }
-    }
-
-    if (ActiveLayout && bHasTarget && bResolvedTarget)
-    {
-        if (!bCursorHasPosition)
-        {
-            CurrentCursorPosition = DesiredPosition;
-            bCursorHasPosition = true;
-        }
-        else
-        {
-            const float Distance = FVector2D::Distance(CurrentCursorPosition, DesiredPosition);
-            if (Distance > 1.f)
-            {
-                const float Alpha = FMath::Clamp(DeltaTime * CursorLerpSpeed, 0.f, 1.f);
-                const float EasedAlpha = FMath::InterpEaseInOut(0.f, 1.f, Alpha, 2.f);
-                CurrentCursorPosition = FMath::Lerp(CurrentCursorPosition, DesiredPosition, EasedAlpha);
-            }
-            else
-            {
-                CurrentCursorPosition = DesiredPosition;
-            }
-        }
-
-        ActiveLayout->UpdateCursorPosition(CurrentCursorPosition);
-    }
-
     if (ActiveNavigationBehaviour)
     {
         ActiveNavigationBehaviour->OnTick(DeltaTime);
@@ -726,20 +656,32 @@ void UNsUISubsystem::UpdateLayerHittestability()
 
 void UNsUISubsystem::UpdateCursorToWidget(UWidget* Widget)
 {
-    CursorTargetWidget = Widget;
-    CursorTargetType = Widget ? ENsUICursorTargetType::Widget : ENsUICursorTargetType::None;
+    EnsureLayout();
+
+    if (ActiveLayout && ActiveLayout->GetCursorWidget())
+    {
+        ActiveLayout->GetCursorWidget()->SetTargetWidget(Widget);
+    }
 }
 
 void UNsUISubsystem::UpdateCursorToActor(AActor* Actor)
 {
-    CursorTargetActor = Actor;
-    CursorTargetType = Actor ? ENsUICursorTargetType::Actor : ENsUICursorTargetType::None;
+    EnsureLayout();
+
+    if (ActiveLayout && ActiveLayout->GetCursorWidget())
+    {
+        ActiveLayout->GetCursorWidget()->SetTargetActor(Actor);
+    }
 }
 
 void UNsUISubsystem::UpdateCursorToLocation(const FVector& WorldLocation)
 {
-    CursorTargetWorldLocation = WorldLocation;
-    CursorTargetType = ENsUICursorTargetType::Location;
+    EnsureLayout();
+
+    if (ActiveLayout && ActiveLayout->GetCursorWidget())
+    {
+        ActiveLayout->GetCursorWidget()->SetTargetLocation(WorldLocation);
+    }
 }
 
 void UNsUISubsystem::UpdateCursorVisibility()

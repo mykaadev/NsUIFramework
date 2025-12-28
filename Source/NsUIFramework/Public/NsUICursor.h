@@ -5,6 +5,9 @@
 #include "NsUICursor.generated.h"
 
 class SImage;
+class UWidget;
+class AActor;
+class UNsUILayout;
 
 UCLASS()
 class NSUIFRAMEWORK_API UNsUICursor : public UWidget
@@ -17,6 +20,7 @@ public:
     virtual TSharedRef<SWidget> RebuildWidget() override;
     virtual void SynchronizeProperties() override;
     virtual void ReleaseSlateResources(bool bWholeView) override;
+    virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
     /** Brush used to draw the cursor. A default arrow is applied in the constructor. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
@@ -24,6 +28,49 @@ public:
 
     void SetCursorBrush(const FSlateBrush& InBrush);
 
+    /** Configure the layout that owns this cursor. */
+    void SetOwningLayout(UNsUILayout* InLayout);
+
+    /** Drive the cursor toward a widget target. */
+    void SetTargetWidget(UWidget* Widget);
+    /** Drive the cursor toward an actor target. */
+    void SetTargetActor(AActor* Actor);
+    /** Drive the cursor toward an arbitrary world location. */
+    void SetTargetLocation(const FVector& WorldLocation);
+
 private:
+    enum class ENsUICursorTargetType
+    {
+        None,
+        Widget,
+        Actor,
+        Location
+    };
+
+    FVector2D ResolveWidgetScreenPosition(UWidget* Widget) const;
+    FVector2D ResolveActorScreenPosition(AActor* Actor) const;
+    FVector2D ResolveLocationScreenPosition(const FVector& WorldLocation) const;
+    FVector2D ResolveDesiredScreenPosition() const;
+
     TSharedPtr<SImage> MyImage;
+
+    UPROPERTY()
+    TObjectPtr<UNsUILayout> OwningLayout;
+
+    /** Cached position the cursor is moving toward. */
+    FVector2D CursorTargetPosition;
+    /** Current cursor position for interpolation. */
+    FVector2D CurrentCursorPosition;
+    /** Current cursor target type. */
+    ENsUICursorTargetType CursorTargetType = ENsUICursorTargetType::None;
+    /** Widget driving the cursor position. */
+    TWeakObjectPtr<UWidget> CursorTargetWidget;
+    /** Actor driving the cursor position. */
+    TWeakObjectPtr<AActor> CursorTargetActor;
+    /** World-space point driving the cursor position. */
+    FVector CursorTargetWorldLocation;
+    /** True once the cursor has been positioned at least once. */
+    bool bCursorHasPosition = false;
+    /** Speed multiplier controlling cursor interpolation. */
+    float CursorLerpSpeed = 10.f;
 };
