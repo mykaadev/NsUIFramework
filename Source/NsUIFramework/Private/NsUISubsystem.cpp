@@ -24,7 +24,6 @@ static TSharedPtr<IInputProcessor> GNavigationInputPreProcessor;
 
 UNsUISubsystem::UNsUISubsystem()
     : ActiveLayout(nullptr)
-    , LastInputSource(ENsUIInputSource::KeyboardGamepad)
     , ActiveNavigationBehaviour(nullptr)
 {
     DefaultLayoutClass = UNsUILayout::StaticClass();
@@ -329,9 +328,6 @@ void UNsUISubsystem::PopAllWidgetsFromLayer(ENsUILayer Layer)
 
 void UNsUISubsystem::Navigate(EUINavigation Direction)
 {
-    LastInputSource = ENsUIInputSource::KeyboardGamepad;
-    UpdateCursorVisibility();
-
     if (ActiveNavigationBehaviour)
     {
         ActiveNavigationBehaviour->OnNavigate(Direction);
@@ -340,9 +336,6 @@ void UNsUISubsystem::Navigate(EUINavigation Direction)
 
 void UNsUISubsystem::Confirm()
 {
-    LastInputSource = ENsUIInputSource::KeyboardGamepad;
-    UpdateCursorVisibility();
-
     if (ActiveNavigationBehaviour)
     {
         ActiveNavigationBehaviour->OnConfirm();
@@ -354,9 +347,6 @@ void UNsUISubsystem::Confirm()
 
 void UNsUISubsystem::Cancel()
 {
-    LastInputSource = ENsUIInputSource::KeyboardGamepad;
-    UpdateCursorVisibility();
-
     if (ActiveNavigationBehaviour)
     {
         ActiveNavigationBehaviour->OnCancel();
@@ -388,6 +378,79 @@ void UNsUISubsystem::ForwardCancelToSlate()
 
 void UNsUISubsystem::Tick(float DeltaTime)
 {
+    UpdateCursorVisibility();
+
+    bool bHasTarget = CursorTargetType != ENsUICursorTargetType::None;
+    FVector2D DesiredPosition = CursorTargetPosition;
+    bool bResolvedTarget = false;
+
+    if (ActiveLayout && bHasTarget)
+    {
+        switch (CursorTargetType)
+        {
+        case ENsUICursorTargetType::Widget:
+            if (CursorTargetWidget.IsValid() && CursorTargetWidget->GetCachedWidget().IsValid())
+            {
+                DesiredPosition = GetWidgetScreenPosition(CursorTargetWidget.Get());
+                CursorTargetPosition = DesiredPosition;
+                bResolvedTarget = true;
+            }
+            else
+            {
+                CursorTargetType = ENsUICursorTargetType::None;
+                CursorTargetWidget.Reset();
+                bHasTarget = false;
+            }
+            break;
+        case ENsUICursorTargetType::Actor:
+            if (CursorTargetActor.IsValid())
+            {
+                DesiredPosition = GetActorScreenPosition(CursorTargetActor.Get());
+                CursorTargetPosition = DesiredPosition;
+                bResolvedTarget = true;
+            }
+            else
+            {
+                CursorTargetType = ENsUICursorTargetType::None;
+                CursorTargetActor.Reset();
+                bHasTarget = false;
+            }
+            break;
+        case ENsUICursorTargetType::Location:
+            DesiredPosition = GetLocationScreenPosition(CursorTargetWorldLocation);
+            CursorTargetPosition = DesiredPosition;
+            bResolvedTarget = true;
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (ActiveLayout && bHasTarget && bResolvedTarget)
+    {
+        if (!bCursorHasPosition)
+        {
+            CurrentCursorPosition = DesiredPosition;
+            bCursorHasPosition = true;
+        }
+        else
+        {
+            const float Distance = FVector2D::Distance(CurrentCursorPosition, DesiredPosition);
+            if (Distance > 1.f)
+            {
+                const float Alpha = FMath::Clamp(DeltaTime * CursorLerpSpeed, 0.f, 1.f);
+                const float EasedAlpha = FMath::InterpEaseInOut(0.f, 1.f, Alpha, 2.f);
+                CurrentCursorPosition = FMath::Lerp(CurrentCursorPosition, DesiredPosition, EasedAlpha);
+            }
+            else
+            {
+                CurrentCursorPosition = DesiredPosition;
+            }
+        }
+
+        ActiveLayout->UpdateCursorPosition(CurrentCursorPosition);
+    }
+
     if (ActiveNavigationBehaviour)
     {
         ActiveNavigationBehaviour->OnTick(DeltaTime);
@@ -477,21 +540,8 @@ void UNsUISubsystem::HandleHoverFocus(UWidget* Widget)
 {
     if (ActiveNavigationBehaviour)
     {
-        NoteMouseInput();
         ActiveNavigationBehaviour->OnSlateHover(Widget);
     }
-}
-
-void UNsUISubsystem::NoteMouseInput()
-{
-    LastInputSource = ENsUIInputSource::Mouse;
-    UpdateCursorVisibility();
-}
-
-void UNsUISubsystem::NoteKeyboardNavigationInput()
-{
-    LastInputSource = ENsUIInputSource::KeyboardGamepad;
-    UpdateCursorVisibility();
 }
 
 void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState)
@@ -527,12 +577,6 @@ TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
 
 void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)
 {
-    if (InFocusEvent.GetCause() == EFocusCause::Mouse)
-    {
-        LastInputSource = ENsUIInputSource::Mouse;
-        UpdateCursorVisibility();
-    }
-
     if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
     {
         UWidget* NewFocusedWidget = WidgetBehaviour->ResolveWidgetFromSlate(InNewPath, InNewWidget);
@@ -547,11 +591,6 @@ void UNsUISubsystem::OnSlatePreTick(float InDeltaTime)
 
 void UNsUISubsystem::SyncHoverFocusWithSlate(float InDeltaTime)
 {
-    if (LastInputSource != ENsUIInputSource::Mouse)
-    {
-        return;
-    }
-
     if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
     {
         WidgetBehaviour->SyncHoverFocusWithSlate();
@@ -687,48 +726,27 @@ void UNsUISubsystem::UpdateLayerHittestability()
 
 void UNsUISubsystem::UpdateCursorToWidget(UWidget* Widget)
 {
-    if (!ActiveLayout || !Widget)
-    {
-        return;
-    }
-
-    // Skip updates until the widget has an active Slate instance to measure
-    if (!Widget->GetCachedWidget().IsValid())
-    {
-        return;
-    }
-
-    const FVector2D ScreenPosition = GetWidgetScreenPosition(Widget);
-    ActiveLayout->UpdateCursorPosition(ScreenPosition);
+    CursorTargetWidget = Widget;
+    CursorTargetType = Widget ? ENsUICursorTargetType::Widget : ENsUICursorTargetType::None;
 }
 
 void UNsUISubsystem::UpdateCursorToActor(AActor* Actor)
 {
-    if (!ActiveLayout || !Actor)
-    {
-        return;
-    }
-
-    const FVector2D ScreenPosition = GetActorScreenPosition(Actor);
-    ActiveLayout->UpdateCursorPosition(ScreenPosition);
+    CursorTargetActor = Actor;
+    CursorTargetType = Actor ? ENsUICursorTargetType::Actor : ENsUICursorTargetType::None;
 }
 
 void UNsUISubsystem::UpdateCursorToLocation(const FVector& WorldLocation)
 {
-    if (!ActiveLayout)
-    {
-        return;
-    }
-
-    const FVector2D ScreenPosition = GetLocationScreenPosition(WorldLocation);
-    ActiveLayout->UpdateCursorPosition(ScreenPosition);
+    CursorTargetWorldLocation = WorldLocation;
+    CursorTargetType = ENsUICursorTargetType::Location;
 }
 
 void UNsUISubsystem::UpdateCursorVisibility()
 {
     if (ActiveLayout)
     {
-        ActiveLayout->SetCursorVisibility(LastInputSource == ENsUIInputSource::KeyboardGamepad);
+        ActiveLayout->SetCursorVisibility(true);
     }
 }
 

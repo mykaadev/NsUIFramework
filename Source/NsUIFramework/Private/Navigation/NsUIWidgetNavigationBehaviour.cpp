@@ -184,16 +184,9 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
 
     EFocusCause RequestedFocusCause = FocusCause;
 
-    // Programmatic focus changes should mirror the last input source so cursor/focus rules stay in sync
-    // (mouse pushes keep the cursor visible, navigation pushes show keyboard focus immediately).
     if (RequestedFocusCause == EFocusCause::SetDirectly)
     {
-        if (const UNsUISubsystem* Subsystem = GetOwningSubsystem())
-        {
-            RequestedFocusCause = Subsystem->GetLastInputSource() == ENsUIInputSource::Mouse
-                                       ? EFocusCause::Mouse
-                                       : EFocusCause::Navigation;
-        }
+        RequestedFocusCause = EFocusCause::Navigation;
     }
 
     const bool bIsMouseFocus = RequestedFocusCause == EFocusCause::Mouse;
@@ -205,12 +198,6 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
 
         if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
         {
-            // Only navigation-driven focus changes should switch cursor visibility to keyboard/gamepad mode.
-            if (bIsNavigationInput)
-            {
-                Subsystem->NoteKeyboardNavigationInput();
-            }
-
             if (const ULocalPlayer* const LocalPlayer = Subsystem->GetLocalPlayer())
             {
                 FSlateApplication::Get().SetUserFocus(LocalPlayer->GetControllerId(), SlateWidget, RequestedFocusCause);
@@ -305,14 +292,6 @@ void UNsUIWidgetNavigationBehaviour::SyncHoverFocusWithSlate()
     if (!FSlateApplication::IsInitialized())
     {
         return;
-    }
-
-    if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
-    {
-        if (Subsystem->GetLastInputSource() != ENsUIInputSource::Mouse)
-        {
-            return;
-        }
     }
 
     FSlateApplication& SlateApp = FSlateApplication::Get();
