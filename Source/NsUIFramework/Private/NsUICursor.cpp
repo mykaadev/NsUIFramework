@@ -9,6 +9,7 @@
 #include "SlateBasics.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Images/SImage.h"
+#include "NsUIDeveloperSettings.h"
 #include "NsUILayout.h"
 
 UNsUICursor::UNsUICursor(const FObjectInitializer& ObjectInitializer)
@@ -206,8 +207,12 @@ void UNsUICursor::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
         const float Distance = FVector2D::Distance(CurrentCursorPosition, CursorTargetPosition);
         if (Distance > 1.f)
         {
-            const float Alpha = FMath::Clamp(InDeltaTime * CursorLerpSpeed, 0.f, 1.f);
-            const float EasedAlpha = FMath::InterpEaseInOut(0.f, 1.f, Alpha, 2.f);
+            const UNsUIDeveloperSettings* Settings = GetDefault<UNsUIDeveloperSettings>();
+            const float CursorVelocity = Settings ? Settings->CursorVelocity : 10.f;
+            const FRichCurve* CursorCurve = Settings ? Settings->CursorLerpCurve.GetRichCurveConst() : nullptr;
+
+            const float Alpha = FMath::Clamp(InDeltaTime * CursorVelocity, 0.f, 1.f);
+            const float EasedAlpha = CursorCurve ? CursorCurve->Eval(Alpha) : FMath::InterpEaseInOut(0.f, 1.f, Alpha, 2.f);
             CurrentCursorPosition = FMath::Lerp(CurrentCursorPosition, CursorTargetPosition, EasedAlpha);
         }
         else

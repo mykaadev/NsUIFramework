@@ -71,6 +71,4 @@ private:
     FVector CursorTargetWorldLocation;
     /** True once the cursor has been positioned at least once. */
     bool bCursorHasPosition = false;
-    /** Speed multiplier controlling cursor interpolation. */
-    float CursorLerpSpeed = 10.f;
 };
