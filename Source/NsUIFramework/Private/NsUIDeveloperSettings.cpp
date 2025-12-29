@@ -15,4 +15,19 @@ UNsUIDeveloperSettings::UNsUIDeveloperSettings()
     NavigatePreviousKeys = { EKeys::Tab, EKeys::BackSpace };
 
     ConfirmMouseButtons = { EKeys::LeftMouseButton };
+
+    CursorVelocity = 20.f;
+
+    if (FRichCurve* const Curve = CursorLerpCurve.GetRichCurve())
+    {
+        if (Curve->GetNumKeys() == 0)
+        {
+            Curve->AddKey(0.f, 0.f);
+            Curve->AddKey(1.f, 1.f);
+            for (FRichCurveKey& Key : Curve->Keys)
+            {
+                Key.InterpMode = RCIM_Cubic;
+            }
+        }
+    }
 }

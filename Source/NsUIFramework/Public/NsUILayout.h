@@ -20,8 +20,6 @@ public:
     FVector2D GetCursorAnchor() const { return CursorAnchor; }
     FVector2D GetCursorWidgetSnapAnchor() const { return CursorWidgetSnapAnchor; }
 
-
-    void UpdateCursorPosition(const FVector2D& ScreenPosition);
     void SetCursorAnchor(const FVector2D& InAnchor);
     void SetCursorVisibility(bool bVisible);
 

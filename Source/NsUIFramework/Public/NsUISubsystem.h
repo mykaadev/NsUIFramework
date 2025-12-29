@@ -95,12 +95,6 @@ public:
 
     /** Accessor for current navigation behaviour. */
     UNsUINavigationBehaviour* GetActiveNavigationBehaviour() const { return ActiveNavigationBehaviour; }
-    /** Expose the last input source for behaviours. */
-    ENsUIInputSource GetLastInputSource() const { return LastInputSource; }
-    /** Mark that mouse input was received (updates cursor visibility rules). */
-    void NoteMouseInput();
-    /** Mark that navigation-style input was received so focus/cursor rules reflect keyboard/gamepad use. */
-    void NoteKeyboardNavigationInput();
 
     /** Handle Hover Focus */
     void HandleHoverFocus(UWidget* Widget);
@@ -135,8 +129,6 @@ private:
 
     /** Map of layer enum to stack state. */
     TMap<ENsUILayer, FNsUILayerState> LayerStates;
-    /** Tracks most recent input device to toggle cursor visibility rules. */
-    ENsUIInputSource LastInputSource;
     /** Handles for Slate focus/tick delegates. */
     FDelegateHandle FocusChangedHandle;
     FDelegateHandle SlatePreTickHandle;

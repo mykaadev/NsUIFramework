@@ -263,8 +263,6 @@ public:
             return false;
         }
 
-        Sys->NoteMouseInput();
-
         const FKey Button = MouseEvent.GetEffectingButton();
         const UNsUIDeveloperSettings* Settings = FNsUINavigationHelpers::GetSettings();
         const bool bIsConfirmMouse = Settings && Settings->ConfirmMouseButtons.Contains(Button);

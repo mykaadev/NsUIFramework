@@ -73,6 +73,7 @@ TSharedRef<SWidget> UNsUILayout::RebuildWidget()
     if (CursorWidget)
     {
         CursorWidget->SetCursorBrush(CursorBrush);
+        CursorWidget->SetOwningLayout(this);
 
         // This puts it above Game/Menu/Modal because it’s added last
         RootOverlay->AddChildToOverlay(CursorWidget);
@@ -91,17 +92,6 @@ UNsUILayer* UNsUILayout::GetLayerWidget(ENsUILayer Layer) const
     return nullptr;
 }
 
-void UNsUILayout::UpdateCursorPosition(const FVector2D& ScreenPosition)
-{
-    if (CursorWidget)
-    {
-        const FVector2D Size = CursorWidget->GetDesiredSize();
-        const FVector2D Offset = Size * CursorAnchor;
-
-        CursorWidget->SetRenderTranslation(ScreenPosition - Offset);
-    }
-}
-
 void UNsUILayout::SetCursorAnchor(const FVector2D& InAnchor)
 {
     CursorAnchor.X = FMath::Clamp(InAnchor.X, 0.f, 1.f);
@@ -112,7 +102,7 @@ void UNsUILayout::SetCursorVisibility(bool bVisible)
 {
     if (CursorWidget)
     {
-        CursorWidget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Visible); // ESlateVisibility::Collapsed
+        CursorWidget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
     }
 }
 

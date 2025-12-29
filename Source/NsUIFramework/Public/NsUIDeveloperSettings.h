@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Curves/CurveFloat.h"
 #include "Engine/DeveloperSettings.h"
 #include "InputCoreTypes.h"
 #include "NsUIDeveloperSettings.generated.h"
@@ -46,4 +47,12 @@ public:
     /** Mouse buttons that should act as confirm in NsUI. */
     UPROPERTY(Config, EditAnywhere, Category = "Input")
     TArray<FKey> ConfirmMouseButtons;
+
+    /** Cursor interpolation speed. */
+    UPROPERTY(Config, EditAnywhere, Category = "Cursor", meta = (ClampMin = "0.0"))
+    float CursorVelocity;
+
+    /** Curve applied to cursor interpolation alpha. */
+    UPROPERTY(Config, EditAnywhere, Category = "Cursor")
+    FRuntimeFloatCurve CursorLerpCurve;
 };
