@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Components/Widget.h"
+#include "Blueprint/UserWidget.h"
 #include "Styling/SlateBrush.h"
 #include "NsUICursor.generated.h"
 
@@ -10,7 +10,7 @@ class AActor;
 class UNsUILayout;
 
 UCLASS()
-class NSUIFRAMEWORK_API UNsUICursor : public UWidget
+class NSUIFRAMEWORK_API UNsUICursor : public UUserWidget
 {
     GENERATED_BODY()
 
@@ -33,8 +33,10 @@ public:
 
     /** Drive the cursor toward a widget target. */
     void SetTargetWidget(UWidget* Widget);
+
     /** Drive the cursor toward an actor target. */
     void SetTargetActor(AActor* Actor);
+
     /** Drive the cursor toward an arbitrary world location. */
     void SetTargetLocation(const FVector& WorldLocation);
 
