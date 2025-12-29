@@ -686,9 +686,14 @@ void UNsUISubsystem::UpdateCursorToLocation(const FVector& WorldLocation)
 
 void UNsUISubsystem::UpdateCursorVisibility()
 {
-    if (ActiveLayout)
+    if (!ActiveLayout)
     {
-        ActiveLayout->SetCursorVisibility(true);
+        return;
+    }
+
+    if (UNsUICursor* Cursor = ActiveLayout->GetCursorWidget())
+    {
+        ActiveLayout->SetCursorVisibility(Cursor->HasTarget());
     }
 }
 

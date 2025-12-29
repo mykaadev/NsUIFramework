@@ -59,18 +59,33 @@ void UNsUICursor::SetTargetWidget(UWidget* Widget)
 {
     CursorTargetWidget = Widget;
     CursorTargetType = Widget ? ENsUICursorTargetType::Widget : ENsUICursorTargetType::None;
+
+    if (!Widget)
+    {
+        bCursorHasPosition = false;
+    }
 }
 
 void UNsUICursor::SetTargetActor(AActor* Actor)
 {
     CursorTargetActor = Actor;
     CursorTargetType = Actor ? ENsUICursorTargetType::Actor : ENsUICursorTargetType::None;
+
+    if (!Actor)
+    {
+        bCursorHasPosition = false;
+    }
 }
 
 void UNsUICursor::SetTargetLocation(const FVector& WorldLocation)
 {
     CursorTargetWorldLocation = WorldLocation;
     CursorTargetType = ENsUICursorTargetType::Location;
+}
+
+bool UNsUICursor::HasTarget() const
+{
+    return CursorTargetType != ENsUICursorTargetType::None && HasValidTarget();
 }
 
 FVector2D UNsUICursor::ResolveWidgetScreenPosition(UWidget* Widget) const
@@ -163,28 +178,52 @@ FVector2D UNsUICursor::ResolveDesiredScreenPosition() const
     return FVector2D::ZeroVector;
 }
 
+bool UNsUICursor::HasValidTarget() const
+{
+    switch (CursorTargetType)
+    {
+    case ENsUICursorTargetType::Widget:
+        return CursorTargetWidget.IsValid() && CursorTargetWidget->GetCachedWidget().IsValid();
+    case ENsUICursorTargetType::Actor:
+        return CursorTargetActor.IsValid();
+    case ENsUICursorTargetType::Location:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void UNsUICursor::SetCursorVisible(bool bVisible)
+{
+    const ESlateVisibility DesiredVisibility = bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+
+    if (GetVisibility() != DesiredVisibility)
+    {
+        SetVisibility(DesiredVisibility);
+    }
+}
+
 void UNsUICursor::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
 
     if (!OwningLayout || CursorTargetType == ENsUICursorTargetType::None)
     {
+        SetCursorVisible(false);
         return;
     }
 
-    if (CursorTargetType == ENsUICursorTargetType::Widget && (!CursorTargetWidget.IsValid() || !CursorTargetWidget->GetCachedWidget().IsValid()))
+    if (!HasValidTarget())
     {
         CursorTargetType = ENsUICursorTargetType::None;
         CursorTargetWidget.Reset();
+        CursorTargetActor.Reset();
+        bCursorHasPosition = false;
+        SetCursorVisible(false);
         return;
     }
 
-    if (CursorTargetType == ENsUICursorTargetType::Actor && !CursorTargetActor.IsValid())
-    {
-        CursorTargetType = ENsUICursorTargetType::None;
-        CursorTargetActor.Reset();
-        return;
-    }
+    SetCursorVisible(true);
 
     const FVector2D DesiredPosition = ResolveDesiredScreenPosition();
     if (!DesiredPosition.IsNearlyZero() || CursorTargetType == ENsUICursorTargetType::Location)

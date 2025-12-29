@@ -38,6 +38,9 @@ public:
     /** Drive the cursor toward an arbitrary world location. */
     void SetTargetLocation(const FVector& WorldLocation);
 
+    /** Returns true when the cursor has a valid target to chase. */
+    bool HasTarget() const;
+
 private:
     enum class ENsUICursorTargetType
     {
@@ -51,6 +54,8 @@ private:
     FVector2D ResolveActorScreenPosition(AActor* Actor) const;
     FVector2D ResolveLocationScreenPosition(const FVector& WorldLocation) const;
     FVector2D ResolveDesiredScreenPosition() const;
+    bool HasValidTarget() const;
+    void SetCursorVisible(bool bVisible);
 
     TSharedPtr<SImage> MyImage;
 

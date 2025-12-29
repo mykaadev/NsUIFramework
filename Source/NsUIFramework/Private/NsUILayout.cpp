@@ -102,7 +102,7 @@ void UNsUILayout::SetCursorVisibility(bool bVisible)
 {
     if (CursorWidget)
     {
-        CursorWidget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Visible); // ESlateVisibility::Collapsed
+        CursorWidget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
     }
 }
 
