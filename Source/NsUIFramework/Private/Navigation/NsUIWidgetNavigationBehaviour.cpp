@@ -110,6 +110,15 @@ void UNsUIWidgetNavigationBehaviour::OnWidgetAdded_Implementation(UUserWidget* S
     {
         UpdateFocus(FocusTarget, EFocusCause::SetDirectly);
     }
+    else
+    {
+        CurrentWidgetFocus = nullptr;
+
+        if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
+        {
+            Subsystem->UpdateCursorToWidget(nullptr);
+        }
+    }
 }
 
 void UNsUIWidgetNavigationBehaviour::OnWidgetRemoved_Implementation(ENsUILayer Layer, UUserWidget* Screen)

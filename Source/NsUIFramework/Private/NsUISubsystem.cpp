@@ -691,9 +691,20 @@ void UNsUISubsystem::UpdateCursorVisibility()
         return;
     }
 
+    bool bAnyWidgetsPresent = false;
+    for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
+    {
+        if (Pair.Value.Stack.Num() > 0)
+        {
+            bAnyWidgetsPresent = true;
+            break;
+        }
+    }
+
     if (UNsUICursor* Cursor = ActiveLayout->GetCursorWidget())
     {
-        ActiveLayout->SetCursorVisibility(Cursor->HasTarget());
+        const bool bShouldShowCursor = bAnyWidgetsPresent && Cursor->HasTarget();
+        ActiveLayout->SetCursorVisibility(bShouldShowCursor);
     }
 }
 
