@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components/Widget.h"
+#include "Math/Vector2D.h"
 #include "NsUIFrameworkTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "Templates/SharedPointer.h"
@@ -53,11 +54,23 @@ public:
     /** Trigger confirm/accept on the current focus or behavior. */
     void Confirm();
 
+    /** Trigger confirm key-down on the current focus or behavior. */
+    void ConfirmPressed(const FKey& Key);
+
+    /** Trigger confirm key-up on the current focus or behavior. */
+    void ConfirmReleased(const FKey& Key);
+
     /** Trigger cancel/back on the current behavior or focused widget. */
     void Cancel();
 
     /** Helper for navigation behaviours to forward confirm to Slate when no custom behaviour is needed. */
     void ForwardConfirmToSlate();
+
+    /** Helper for navigation behaviours to forward confirm key-down to Slate. */
+    void ForwardConfirmPressedToSlate(const FKey& Key);
+
+    /** Helper for navigation behaviours to forward confirm key-up to Slate. */
+    void ForwardConfirmReleasedToSlate(const FKey& Key);
 
     /** Helper for navigation behaviours to forward cancel to Slate when no custom behaviour is needed. */
     void ForwardCancelToSlate();
@@ -98,6 +111,16 @@ public:
 
     /** Handle Hover Focus */
     void HandleHoverFocus(UWidget* Widget);
+    /** Handle an intentional pointer-driven focus change inside the game viewport. */
+    void HandlePointerFocus(UWidget* Widget);
+    /** Resume viewport interaction without changing the currently selected widget. */
+    void ResumeViewportInteraction();
+    /** Temporarily suspend hover-driven focus updates until the mouse moves meaningfully again. */
+    void SuspendHoverFocusUntilMouseMove();
+    /** True when it is safe for NsUI to reclaim widget focus automatically. */
+    bool ShouldAutoRecoverWidgetFocus() const;
+    /** True when hover-driven mouse focus is temporarily suspended. */
+    bool IsHoverFocusSuspended() const { return bSuspendHoverFocusUntilExplicitViewportInteraction; }
 
     /** Retrieve the top-most widget on a given layer. */
     UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
@@ -106,6 +129,8 @@ public:
 	bool HasActiveNavigationBehaviour() const;
 
 private:
+    static bool IsCursorInsideGameViewport();
+
     /** Internal representation of a single layer's widget stack and focus history. */
     struct FNsUILayerState
     {
@@ -141,14 +166,24 @@ private:
     UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);
 
     void SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
+    void SendKeyDownThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
+    void SendKeyUpThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
     TWeakPtr<SWidget> GetSlateFocus() const;
     void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
     void UpdateCursorVisibility();
     void SyncHoverFocusWithSlate(float InDeltaTime);
     void OnSlatePreTick(float InDeltaTime);
     void UpdateLayerHittestability();
+    void UpdatePlayerInputMode();
+    bool HasAnyWidgetsOnAnyLayer() const;
+    bool ShouldSuspendHoverFocus() const;
 
 #if WITH_EDITOR
     void RefreshDebugOverlay();
 #endif
+
+    bool bSuspendHoverFocusUntilExplicitViewportInteraction = false;
+    bool bSuspendHoverFocusUntilMouseMove = false;
+    bool bWasCursorInsideViewportLastTick = false;
+    FVector2D LastCursorScreenPosition = FVector2D::ZeroVector;
 };

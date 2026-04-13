@@ -12,6 +12,13 @@ void UNsUINavigationBehaviour::OnNavigate_Implementation(EUINavigation Direction
 
 void UNsUINavigationBehaviour::OnConfirm_Implementation() {}
 
+void UNsUINavigationBehaviour::OnConfirmPressed_Implementation(FKey Key)
+{
+    OnConfirm();
+}
+
+void UNsUINavigationBehaviour::OnConfirmReleased_Implementation(FKey Key) {}
+
 void UNsUINavigationBehaviour::OnCancel_Implementation() {}
 
 void UNsUINavigationBehaviour::OnWidgetAdded_Implementation(UUserWidget* Screen, ENsUILayer Layer) {}

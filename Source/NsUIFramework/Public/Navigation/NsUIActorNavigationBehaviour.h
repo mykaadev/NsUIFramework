@@ -14,6 +14,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "NsUI|Navigation|Actors")
     void SetActors(const TArray<AActor*>& InActors);
 
+    /** Focus a specific actor already present in the current actor list. */
+    UFUNCTION(BlueprintCallable, Category = "NsUI|Navigation|Actors")
+    bool FocusActor(AActor* Actor);
+
     /** Clear any stored actor list. */
     UFUNCTION(BlueprintCallable, Category = "NsUI|Navigation|Actors")
     void ClearActors();

@@ -67,8 +67,35 @@ void UNsUIDebugOverlay::SetSnapshots(const TArray<FNsUILayerSnapshot>& Snapshots
     BuildEntries(Snapshots);
 }
 
+void UNsUIDebugOverlay::SetAdditionalLines(const TArray<FString>& Lines)
+{
+    AdditionalLines = Lines;
+}
+
 void UNsUIDebugOverlay::BuildEntries(const TArray<FNsUILayerSnapshot>& Snapshots)
 {
+    if (AdditionalLines.Num() > 0)
+    {
+        if (UVerticalBox* const Column = AddLayerColumn(TEXT("State")))
+        {
+            for (const FString& Line : AdditionalLines)
+            {
+                UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+                Text->SetText(FText::FromString(Line));
+
+                FSlateFontInfo FontInfo = Text->GetFont();
+                FontInfo.Size = 10;
+                Text->SetFont(FontInfo);
+                Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.80f, 0.80f, 0.65f, 0.95f)));
+
+                if (UVerticalBoxSlot* const VBSlot = Column->AddChildToVerticalBox(Text))
+                {
+                    VBSlot->SetPadding(FMargin(0.f, 1.f, 0.f, 0.f));
+                }
+            }
+        }
+    }
+
     // Small, condensed debug info
     for (const FNsUILayerSnapshot& Snapshot : Snapshots)
     {

@@ -2,6 +2,7 @@
 
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
@@ -122,7 +123,7 @@ FVector2D UNsUICursor::ResolveActorScreenPosition(AActor* Actor) const
     const FVector WorldCenter = Bounds.IsValid ? Bounds.GetCenter() : Actor->GetActorLocation();
 
     FVector2D Screen;
-    if (UGameplayStatics::ProjectWorldToScreen(PC, WorldCenter, Screen))
+    if (UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC, WorldCenter, Screen, true))
     {
         return Screen;
     }
@@ -145,7 +146,7 @@ FVector2D UNsUICursor::ResolveLocationScreenPosition(const FVector& WorldLocatio
     }
 
     FVector2D Screen;
-    if (UGameplayStatics::ProjectWorldToScreen(PC, WorldLocation, Screen))
+    if (UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC, WorldLocation, Screen, true))
     {
         return Screen;
     }

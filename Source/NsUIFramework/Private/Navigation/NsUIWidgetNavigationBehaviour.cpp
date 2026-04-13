@@ -11,6 +11,38 @@
 #include "NsUIWidget.h"
 #include "Widgets/SWidget.h"
 
+void UNsUIWidgetNavigationBehaviour::GatherNestedWidgets(UWidget* Root, TArray<UWidget*>& OutWidgets)
+{
+    if (!Root)
+    {
+        return;
+    }
+
+    OutWidgets.Add(Root);
+
+    if (const UUserWidget* UserWidget = Cast<UUserWidget>(Root))
+    {
+        if (const UWidgetTree* Tree = UserWidget->WidgetTree)
+        {
+            TArray<UWidget*> DirectWidgets;
+            Tree->GetAllWidgets(DirectWidgets);
+            for (UWidget* Widget : DirectWidgets)
+            {
+                if (!Widget || Widget == Root)
+                {
+                    continue;
+                }
+
+                OutWidgets.Add(Widget);
+
+                if (Cast<UUserWidget>(Widget) != nullptr)
+                {
+                    GatherNestedWidgets(Widget, OutWidgets);
+                }
+            }
+        }
+    }
+}
 
 void UNsUIWidgetNavigationBehaviour::OnEnter_Implementation()
 {
@@ -20,13 +52,46 @@ void UNsUIWidgetNavigationBehaviour::OnEnter_Implementation()
 void UNsUIWidgetNavigationBehaviour::OnExit_Implementation()
 {
     CurrentWidgetFocus = nullptr;
+    LastWidgetFocus = nullptr;
     LayerStates.Empty();
     SlateToWidgetMap.Empty();
 }
 
 void UNsUIWidgetNavigationBehaviour::OnTick_Implementation(float DeltaTime)
 {
-    SyncHoverFocusWithSlate();
+    const bool bHasValidFocus = CurrentWidgetFocus.IsValid()
+        && CurrentWidgetFocus->GetCachedWidget().IsValid()
+        && CurrentWidgetFocus->IsVisible();
+
+    if (!bHasValidFocus)
+    {
+        if (const UNsUISubsystem* Subsystem = GetOwningSubsystem())
+        {
+            if (!Subsystem->ShouldAutoRecoverWidgetFocus())
+            {
+                return;
+            }
+        }
+
+        if (FSlateApplication::IsInitialized())
+        {
+            FSlateApplication& SlateApp = FSlateApplication::Get();
+            const FWidgetPath HoveredPath = SlateApp.LocateWindowUnderMouse(
+                SlateApp.GetCursorPos(),
+                SlateApp.GetInteractiveTopLevelWindows());
+
+            if (HoveredPath.IsValid())
+            {
+                if (UWidget* HoveredWidget = FindFocusableWidgetInPath(HoveredPath))
+                {
+                    UpdateFocus(HoveredWidget, EFocusCause::Mouse);
+                    return;
+                }
+            }
+        }
+
+        MoveFocusWithFallback(EUINavigation::Next);
+    }
 }
 
 void UNsUIWidgetNavigationBehaviour::OnNavigate_Implementation(EUINavigation Direction)
@@ -46,6 +111,12 @@ void UNsUIWidgetNavigationBehaviour::OnNavigate_Implementation(EUINavigation Dir
 
 void UNsUIWidgetNavigationBehaviour::OnConfirm_Implementation()
 {
+    OnConfirmPressed_Implementation(EKeys::Enter);
+    OnConfirmReleased_Implementation(EKeys::Enter);
+}
+
+void UNsUIWidgetNavigationBehaviour::OnConfirmPressed_Implementation(FKey Key)
+{
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
         if (CurrentWidgetFocus.IsValid() &&
@@ -54,12 +125,33 @@ void UNsUIWidgetNavigationBehaviour::OnConfirm_Implementation()
             const bool bHandled = INsUIInputHandler::Execute_HandleNsUIConfirm(CurrentWidgetFocus.Get());
             if (bHandled)
             {
+                bHasPendingSlateConfirmRelease = false;
+                PendingSlateConfirmKey = FKey();
                 return;
             }
         }
 
-        Subsystem->ForwardConfirmToSlate();
+        bHasPendingSlateConfirmRelease = true;
+        PendingSlateConfirmKey = Key;
+        Subsystem->ForwardConfirmPressedToSlate(Key);
     }
+}
+
+void UNsUIWidgetNavigationBehaviour::OnConfirmReleased_Implementation(FKey Key)
+{
+    if (!bHasPendingSlateConfirmRelease)
+    {
+        return;
+    }
+
+    if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
+    {
+        const FKey ReleaseKey = Key.IsValid() ? Key : PendingSlateConfirmKey;
+        Subsystem->ForwardConfirmReleasedToSlate(ReleaseKey);
+    }
+
+    bHasPendingSlateConfirmRelease = false;
+    PendingSlateConfirmKey = FKey();
 }
 
 void UNsUIWidgetNavigationBehaviour::OnCancel_Implementation()
@@ -156,17 +248,21 @@ void UNsUIWidgetNavigationBehaviour::OnLayerCleared_Implementation(ENsUILayer La
 
 void UNsUIWidgetNavigationBehaviour::OnSlateFocusChanged_Implementation(UWidget* FocusedWidget)
 {
-    CurrentWidgetFocus = FocusedWidget;
+    if (FocusedWidget)
+    {
+        CurrentWidgetFocus = FocusedWidget;
+        LastWidgetFocus = FocusedWidget;
+    }
+    else
+    {
+        CurrentWidgetFocus = nullptr;
+    }
 
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
         if (FocusedWidget)
         {
             Subsystem->UpdateCursorToWidget(FocusedWidget);
-        }
-        else
-        {
-            Subsystem->UpdateCursorToWidget(nullptr);
         }
     }
 }
@@ -222,11 +318,45 @@ void UNsUIWidgetNavigationBehaviour::UpdateFocus(UWidget* Widget, EFocusCause Fo
     }
 
     CurrentWidgetFocus = Widget;
+    LastWidgetFocus = Widget;
 
     if (UNsUISubsystem* Subsystem = GetOwningSubsystem())
     {
         Subsystem->UpdateCursorToWidget(Widget);
     }
+}
+
+UWidget* UNsUIWidgetNavigationBehaviour::GetBestRecoveryFocusWidget() const
+{
+    if (LastWidgetFocus.IsValid() && IsWidgetFocusable(LastWidgetFocus.Get()) && LastWidgetFocus->IsVisible())
+    {
+        return LastWidgetFocus.Get();
+    }
+
+    if (CurrentWidgetFocus.IsValid() && IsWidgetFocusable(CurrentWidgetFocus.Get()) && CurrentWidgetFocus->IsVisible())
+    {
+        return CurrentWidgetFocus.Get();
+    }
+
+    return nullptr;
+}
+
+UWidget* UNsUIWidgetNavigationBehaviour::FindFocusableWidgetInPath(const FWidgetPath& WidgetPath) const
+{
+    for (int32 Index = WidgetPath.Widgets.Num() - 1; Index >= 0; --Index)
+    {
+        const TSharedRef<SWidget>& Candidate = WidgetPath.Widgets[Index].Widget;
+        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(Candidate))
+        {
+            UWidget* Widget = Found->Get();
+            if (IsWidgetFocusable(Widget) && Widget->IsVisible())
+            {
+                return Widget;
+            }
+        }
+    }
+
+    return nullptr;
 }
 
 void UNsUIWidgetNavigationBehaviour::RegisterWidgetTree(UUserWidget* Root)
@@ -237,7 +367,7 @@ void UNsUIWidgetNavigationBehaviour::RegisterWidgetTree(UUserWidget* Root)
     }
 
     TArray<UWidget*> Widgets;
-    Root->WidgetTree->GetAllWidgets(Widgets);
+    GatherNestedWidgets(Root, Widgets);
 
     for (UWidget* Widget : Widgets)
     {
@@ -292,8 +422,7 @@ UWidget* UNsUIWidgetNavigationBehaviour::FindWidgetUnderPointer(const FVector2D&
         return nullptr;
     }
 
-    const TSharedPtr<SWidget> HoveredSlateWidget = HoveredPath.Widgets.Last().Widget;
-    return ResolveWidgetFromSlate(HoveredPath, HoveredSlateWidget);
+    return FindFocusableWidgetInPath(HoveredPath);
 }
 
 void UNsUIWidgetNavigationBehaviour::SyncHoverFocusWithSlate()
@@ -311,16 +440,12 @@ void UNsUIWidgetNavigationBehaviour::SyncHoverFocusWithSlate()
         return;
     }
 
-    for (int32 Index = HoveredPath.Widgets.Num() - 1; Index >= 0; --Index)
-    {
-        const TSharedRef<SWidget>& HoveredSlateWidget = HoveredPath.Widgets[Index].Widget;
+    OnSlateHover(FindFocusableWidgetInPath(HoveredPath));
+}
 
-        if (const TWeakObjectPtr<UWidget>* Found = SlateToWidgetMap.Find(HoveredSlateWidget))
-        {
-            OnSlateHover(Found->Get());
-            break;
-        }
-    }
+void UNsUIWidgetNavigationBehaviour::FocusWidget(UWidget* Widget, EFocusCause FocusCause)
+{
+    UpdateFocus(Widget, FocusCause);
 }
 
 UWidget* UNsUIWidgetNavigationBehaviour::ResolveInitialFocus(UUserWidget* Screen) const
@@ -348,25 +473,34 @@ UWidget* UNsUIWidgetNavigationBehaviour::FindFirstFocusable(UWidget* Root) const
         return nullptr;
     }
 
+    if (const UUserWidget* UserWidget = Cast<UUserWidget>(Root))
+    {
+        TArray<UWidget*> Widgets;
+        GatherNestedWidgets(const_cast<UUserWidget*>(UserWidget), Widgets);
+        for (UWidget* Widget : Widgets)
+        {
+            if (Widget == Root)
+            {
+                continue;
+            }
+
+            if (Widget && IsWidgetFocusable(Widget) && Widget->IsVisible())
+            {
+                return Widget;
+            }
+        }
+
+        if (IsWidgetFocusable(Root) && Root->IsVisible())
+        {
+            return Root;
+        }
+
+        return nullptr;
+    }
+
     if (IsWidgetFocusable(Root) && Root->IsVisible())
     {
         return Root;
-    }
-
-    if (const UUserWidget* UserWidget = Cast<UUserWidget>(Root))
-    {
-        if (const UWidgetTree* Tree = UserWidget->WidgetTree)
-        {
-            TArray<UWidget*> Widgets;
-            Tree->GetAllWidgets(Widgets);
-            for (UWidget* Widget : Widgets)
-            {
-                if (Widget && IsWidgetFocusable(Widget) && Widget->IsVisible())
-                {
-                    return Widget;
-                }
-            }
-        }
     }
 
     return nullptr;
@@ -409,7 +543,35 @@ void UNsUIWidgetNavigationBehaviour::MoveFocusWithFallback(EUINavigation Directi
         return;
     }
 
-    UWidget* Origin = CurrentWidgetFocus.IsValid() ? CurrentWidgetFocus.Get() : FindFirstFocusable(Screen);
+    if (!CurrentWidgetFocus.IsValid())
+    {
+        if (UWidget* RecoveryFocus = GetBestRecoveryFocusWidget())
+        {
+            if (RecoveryFocus->IsChildOf(Screen))
+            {
+                UpdateFocus(RecoveryFocus, EFocusCause::Navigation);
+                return;
+            }
+        }
+
+        if (UWidget* FocusTarget = ResolveInitialFocus(Screen))
+        {
+            if (IsWidgetFocusable(FocusTarget) && FocusTarget->IsVisible())
+            {
+                UpdateFocus(FocusTarget, EFocusCause::Navigation);
+                return;
+            }
+        }
+
+        if (UWidget* FirstFocusable = FindFirstFocusable(Screen))
+        {
+            UpdateFocus(FirstFocusable, EFocusCause::Navigation);
+        }
+
+        return;
+    }
+
+    UWidget* Origin = CurrentWidgetFocus.Get();
     if (!Origin)
     {
         return;
@@ -461,7 +623,7 @@ UWidget* UNsUIWidgetNavigationBehaviour::FindSpatialNeighbor(UUserWidget* Screen
     const FVector2D OriginCenter = Subsystem->GetWidgetScreenPosition(Origin);
 
     TArray<UWidget*> Widgets;
-    Screen->WidgetTree->GetAllWidgets(Widgets);
+    GatherNestedWidgets(Screen, Widgets);
 
     UWidget* BestCandidate = nullptr;
     float BestScore = TNumericLimits<float>::Max();
@@ -501,6 +663,22 @@ bool UNsUIWidgetNavigationBehaviour::IsWidgetFocusable(const UWidget* const Widg
         return false;
     }
 
+    if (!Widget->GetIsEnabled() || !Widget->IsVisible())
+    {
+        return false;
+    }
+
     const TSharedPtr<SWidget> CachedWidget = Widget->GetCachedWidget();
-    return CachedWidget.IsValid() && CachedWidget->SupportsKeyboardFocus();
+    if (!CachedWidget.IsValid())
+    {
+        return false;
+    }
+
+    if (const UUserWidget* UserWidget = Cast<UUserWidget>(Widget))
+    {
+        return UserWidget->IsInteractable() && UserWidget->IsFocusable();
+    }
+
+    return CachedWidget->IsInteractable() && CachedWidget->SupportsKeyboardFocus();
 }
+

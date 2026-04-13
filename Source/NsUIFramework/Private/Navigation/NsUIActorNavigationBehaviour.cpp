@@ -37,6 +37,25 @@ void UNsUIActorNavigationBehaviour::SetActors(const TArray<AActor*>& InActors)
     FocusActorAtIndex(CurrentIndex);
 }
 
+bool UNsUIActorNavigationBehaviour::FocusActor(AActor* Actor)
+{
+    if (Actor == nullptr)
+    {
+        return false;
+    }
+
+    for (int32 Index = 0; Index < Actors.Num(); ++Index)
+    {
+        if (Actors[Index].Get() == Actor)
+        {
+            FocusActorAtIndex(Index);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void UNsUIActorNavigationBehaviour::ClearActors()
 {
     Actors.Reset();

@@ -44,6 +44,14 @@ public:
     UFUNCTION(BlueprintNativeEvent)
     void OnConfirm();
 
+    /** Called when confirm/accept input begins with the original key preserved. */
+    UFUNCTION(BlueprintNativeEvent)
+    void OnConfirmPressed(FKey Key);
+
+    /** Called when confirm/accept input ends with the original key preserved. */
+    UFUNCTION(BlueprintNativeEvent)
+    void OnConfirmReleased(FKey Key);
+
     /** Called when cancel/back input is pressed. */
     UFUNCTION(BlueprintNativeEvent)
     void OnCancel();

@@ -20,6 +20,7 @@ public:
     virtual TSharedRef<SWidget> RebuildWidget() override;
 
     void SetSnapshots(const TArray<FNsUILayerSnapshot>& Snapshots);
+    void SetAdditionalLines(const TArray<FString>& Lines);
 
 protected:
     void BuildEntries(const TArray<FNsUILayerSnapshot>& Snapshots);
@@ -30,5 +31,7 @@ protected:
 
     UPROPERTY(Transient)
     UBorder* BackgroundBorder;
+
+    TArray<FString> AdditionalLines;
 };
 

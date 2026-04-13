@@ -3,8 +3,12 @@
 #include "NsUIDeveloperSettings.h"
 #include "NsUISlateInputGuard.h"
 #include "NsUISubsystem.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/World.h"
 #include "Navigation/NsUIWidgetNavigationBehaviour.h"
 #include "Widgets/SWidget.h"
+#include "Widgets/SViewport.h"
 
 class FNsUINavigationHelpers
 {
@@ -18,6 +22,11 @@ public:
     {
         const UNsUIDeveloperSettings* Settings = GetSettings();
         if (!Settings)
+        {
+            return EUINavigation::Invalid;
+        }
+
+        if (Settings->ConfirmKeys.Contains(InKeyEvent.GetKey()) || Settings->CancelKeys.Contains(InKeyEvent.GetKey()))
         {
             return EUINavigation::Invalid;
         }
@@ -60,6 +69,38 @@ public:
     {
         const UNsUIDeveloperSettings* Settings = GetSettings();
         return Settings && Settings->CancelKeys.Contains(InKeyEvent.GetKey());
+    }
+
+    static bool IsClickInsideGameViewport(FSlateApplication& SlateApp, const FVector2D& ScreenSpacePosition)
+    {
+        if (!GEngine || GEngine->GameViewport == nullptr)
+        {
+            return false;
+        }
+
+        const TSharedPtr<SViewport> GameViewportWidget = GEngine->GameViewport->GetGameViewportWidget();
+        if (!GameViewportWidget.IsValid())
+        {
+            return false;
+        }
+
+        const FWidgetPath HoveredPath = SlateApp.LocateWindowUnderMouse(ScreenSpacePosition, SlateApp.GetInteractiveTopLevelWindows());
+        return HoveredPath.IsValid() && HoveredPath.ContainsWidget(GameViewportWidget.Get());
+    }
+
+    static bool ShouldPreserveViewportClickFocus(const UNsUISubsystem* Sys)
+    {
+        if (Sys == nullptr || !GEngine)
+        {
+            return false;
+        }
+
+        const UWorld* World = Sys->GetWorld();
+        if (World == nullptr)
+        {
+            return false;
+        }
+        return true;
     }
 };
 
@@ -148,7 +189,7 @@ public:
         {
             if (UNsUISubsystem* Sys = Subsystem.Get())
             {
-                Sys->Confirm();
+                Sys->ConfirmPressed(InKeyEvent.GetKey());
             }
             MarkKeyHandled(InKeyEvent.GetKey());
             return EUINavigationAction::Invalid;
@@ -175,7 +216,7 @@ public:
         switch (Action)
         {
             case EUINavigationAction::Accept:
-                Sys->Confirm();
+                Sys->ConfirmPressed(InKeyEvent.GetKey());
                 MarkKeyHandled(InKeyEvent.GetKey());
                 return EUINavigationAction::Invalid;
 
@@ -214,6 +255,7 @@ bool FNsUINavigationConfig::WasKeyHandled(const FKey& Key)
         {
             HandledKeys.Remove(Key);
             KeysPendingRelease.Remove(Key);
+            return false;
         }
 
         return true;
@@ -255,6 +297,41 @@ public:
         // No-op (we only care about mouse button events)
     }
 
+    virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
+    {
+        UNsUISubsystem* Sys = Subsystem.Get();
+        if (!Sys || !Sys->IsFrameworkActive() || IsForwardingSyntheticInputToSlate())
+        {
+            return false;
+        }
+
+        if (InKeyEvent.IsRepeat())
+        {
+            return false;
+        }
+
+        if (Cast<UNsUIWidgetNavigationBehaviour>(Sys->GetActiveNavigationBehaviour()) == nullptr)
+        {
+            return false;
+        }
+
+        if (FNsUINavigationHelpers::IsConfirmKey(InKeyEvent))
+        {
+            FNsUINavigationConfig::MarkKeyHandled(InKeyEvent.GetKey());
+            Sys->ConfirmPressed(InKeyEvent.GetKey());
+            return true;
+        }
+
+        if (FNsUINavigationHelpers::IsCancelKey(InKeyEvent))
+        {
+            FNsUINavigationConfig::MarkKeyHandled(InKeyEvent.GetKey());
+            Sys->Cancel();
+            return true;
+        }
+
+        return false;
+    }
+
     virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
     {
         UNsUISubsystem* Sys = Subsystem.Get();
@@ -266,24 +343,70 @@ public:
         const FKey Button = MouseEvent.GetEffectingButton();
         const UNsUIDeveloperSettings* Settings = FNsUINavigationHelpers::GetSettings();
         const bool bIsConfirmMouse = Settings && Settings->ConfirmMouseButtons.Contains(Button);
-        if (bIsConfirmMouse)
+        const bool bIsClickInsideViewport = FNsUINavigationHelpers::IsClickInsideGameViewport(SlateApp, MouseEvent.GetScreenSpacePosition());
+        UNsUINavigationBehaviour* Behaviour = Sys->GetActiveNavigationBehaviour();
+        const bool bUsingWidgetNavigation = Cast<UNsUIWidgetNavigationBehaviour>(Behaviour) != nullptr;
+
+        if (!bUsingWidgetNavigation && Behaviour != nullptr)
         {
-            if (UNsUINavigationBehaviour* Behaviour = Sys->GetActiveNavigationBehaviour())
+            return Behaviour->OnMouseButtonDown(MouseEvent.GetScreenSpacePosition(), Button);
+        }
+
+        if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(Behaviour))
+        {
+            if (bIsClickInsideViewport)
+            {
+                if (UWidget* TargetWidget = WidgetBehaviour->FindWidgetUnderPointer(MouseEvent.GetScreenSpacePosition()))
+                {
+                    if (!bIsConfirmMouse)
+                    {
+                        Sys->HandlePointerFocus(TargetWidget);
+                        return true;
+                    }
+
+                    // For confirm clicks, let Slate deliver the click without pre-emptively
+                    // stealing focus on mouse-down. Doing that here can turn the first click
+                    // into a focus change and force a second click for actual activation.
+                    Sys->ResumeViewportInteraction();
+                    return false;
+                }
+
+                Sys->ResumeViewportInteraction();
+                if (UWidget* RecoveryWidget = WidgetBehaviour->GetRecoveryFocusedWidget())
+                {
+                    Sys->HandlePointerFocus(RecoveryWidget);
+                }
+
+                if (Sys->GetTopWidgetOnLayer(Sys->GetTopActiveLayer()) != nullptr
+                    && FNsUINavigationHelpers::ShouldPreserveViewportClickFocus(Sys))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                // Pointer interaction outside the viewport should not immediately reactivate
+                // hover-driven UI ownership until the user intentionally interacts in-viewport again.
+                if (!bIsConfirmMouse)
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (bIsClickInsideViewport)
+        {
+            if (Behaviour != nullptr)
             {
                 if (Behaviour->OnMouseButtonDown(MouseEvent.GetScreenSpacePosition(), Button))
                 {
                     return true;
                 }
             }
+        }
 
-            if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(Sys->GetActiveNavigationBehaviour()))
-            {
-                if (UWidget* TargetWidget = WidgetBehaviour->FindWidgetUnderPointer(MouseEvent.GetScreenSpacePosition()))
-                {
-                    Sys->HandleHoverFocus(TargetWidget);
-                }
-            }
-
+        if (bIsConfirmMouse)
+        {
             // Let Slate and any other input handlers process the click normally.
             return false;
         }
@@ -293,6 +416,21 @@ public:
 
     virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
     {
+        UNsUISubsystem* Sys = Subsystem.Get();
+        if (Sys && Sys->IsFrameworkActive() && !IsForwardingSyntheticInputToSlate())
+        {
+            if (Cast<UNsUIWidgetNavigationBehaviour>(Sys->GetActiveNavigationBehaviour()) != nullptr
+                && (FNsUINavigationHelpers::IsConfirmKey(InKeyEvent) || FNsUINavigationHelpers::IsCancelKey(InKeyEvent)))
+            {
+                if (FNsUINavigationHelpers::IsConfirmKey(InKeyEvent))
+                {
+                    Sys->ConfirmReleased(InKeyEvent.GetKey());
+                }
+                FNsUINavigationConfig::MarkKeyReleased(InKeyEvent.GetKey());
+                return true;
+            }
+        }
+
         FNsUINavigationConfig::MarkKeyReleased(InKeyEvent.GetKey());
         return false;
     }
