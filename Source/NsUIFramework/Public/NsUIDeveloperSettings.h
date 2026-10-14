@@ -44,10 +44,6 @@ public:
     UPROPERTY(Config, EditAnywhere, Category = "Input")
     TArray<FKey> NavigatePreviousKeys;
 
-    /** Mouse buttons that should act as confirm in NsUI. */
-    UPROPERTY(Config, EditAnywhere, Category = "Input")
-    TArray<FKey> ConfirmMouseButtons;
-
     /** Cursor interpolation speed. */
     UPROPERTY(Config, EditAnywhere, Category = "Cursor", meta = (ClampMin = "0.0"))
     float CursorVelocity;

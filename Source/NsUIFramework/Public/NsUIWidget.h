@@ -1,27 +1,11 @@
-﻿#pragma once
-
+#pragma once
 #include "Blueprint/UserWidget.h"
+#include "NsUIScreen.h"
 #include "NsUIWidget.generated.h"
 
+/** Screen parent with the same optional contract as ordinary user widgets. */
 UCLASS()
-class NSUIFRAMEWORK_API UNsUIWidget : public UUserWidget
+class NSUIFRAMEWORK_API UNsUIWidget : public UUserWidget, public INsUIScreen
 {
     GENERATED_BODY()
-
-public:
-    UNsUIWidget(const FObjectInitializer& ObjectInitializer);
-
-    virtual void NativeOnInitialized() override;
-    virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-    virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
-
-    UFUNCTION(BlueprintNativeEvent, Category = "NsUI")
-    UWidget* GetInitialFocusWidget() const;
-
-protected:
-    /** If true, moving the mouse over the widget will request keyboard focus. */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NsUI")
-    bool bFocusOnHover;
-
-    void RequestFocus(EFocusCause Cause);
 };

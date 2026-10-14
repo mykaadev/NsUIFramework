@@ -1,189 +1,101 @@
 #pragma once
 
-#include "Components/Widget.h"
-#include "Math/Vector2D.h"
 #include "NsUIFrameworkTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
-#include "Templates/SharedPointer.h"
 #include "Tickable.h"
-#include "UObject/SoftObjectPtr.h"
 #include "NsUISubsystem.generated.h"
 
-class UNsUILayout;
-class UNsUILayer;
-class UNsUICursor;
-class UNsUIWidget;
 class UUserWidget;
 class UWidget;
+class UNsUICursor;
+class UNsUILayout;
 class SWidget;
-class UNsUINavigationBehaviour;
+class FNavigationConfig;
+class UGameViewportClient;
 
-/**
- * Central entry point for the retro UI stack. Manages layout creation, widget stacks per
- * layer, widget focus management, retro cursor syncing, and pluggable navigation behaviours
- * that own their own navigation state (UMG, actor selection, etc.).
- */
+/** Owns screen interaction for one local player. */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUISubsystem : public ULocalPlayerSubsystem, public FTickableGameObject
 {
     GENERATED_BODY()
 
 public:
-    UNsUISubsystem();
-
+    //~ Begin ULocalPlayerSubsystem
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
+    //~ End ULocalPlayerSubsystem
 
-    static UNsUISubsystem* GetSubsystem();
-
-    /** Push a widget class onto the given UI layer (synchronous class). */
-    UUserWidget* PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer);
-
-    /** Push a soft widget class onto the given UI layer (loads if needed). */
-    UUserWidget* PushWidgetToLayer(TSoftClassPtr<UUserWidget> ScreenClass, ENsUILayer Layer);
-
-    /** Remove the top-most widget from a layer stack. */
-    void PopWidgetFromLayer(ENsUILayer Layer);
-
-    /** Clear an entire layer stack. */
-    void PopAllWidgetsFromLayer(ENsUILayer Layer);
-
-    /** Route directional navigation into the active behaviour. */
-    void Navigate(EUINavigation Direction);
-
-    /** Trigger confirm/accept on the current focus or behavior. */
-    void Confirm();
-
-    /** Trigger confirm key-down on the current focus or behavior. */
-    void ConfirmPressed(const FKey& Key);
-
-    /** Trigger confirm key-up on the current focus or behavior. */
-    void ConfirmReleased(const FKey& Key);
-
-    /** Trigger cancel/back on the current behavior or focused widget. */
-    void Cancel();
-
-    /** Helper for navigation behaviours to forward confirm to Slate when no custom behaviour is needed. */
-    void ForwardConfirmToSlate();
-
-    /** Helper for navigation behaviours to forward confirm key-down to Slate. */
-    void ForwardConfirmPressedToSlate(const FKey& Key);
-
-    /** Helper for navigation behaviours to forward confirm key-up to Slate. */
-    void ForwardConfirmReleasedToSlate(const FKey& Key);
-
-    /** Helper for navigation behaviours to forward cancel to Slate when no custom behaviour is needed. */
-    void ForwardCancelToSlate();
-
-    /** Returns true when NsUI is currently controlling focus/navigation (layout present or a navigation behaviour is active). */
-    bool IsFrameworkActive() const;
-
-    void ToggleDebugOverlay();
-
+    //~ Begin FTickableGameObject
     virtual void Tick(float DeltaTime) override;
+    virtual bool IsTickableWhenPaused() const override { return true; }
     virtual TStatId GetStatId() const override;
     virtual UWorld* GetTickableGameObjectWorld() const override { return GetWorld(); }
+    //~ End FTickableGameObject
 
-    /** Swap in a new navigation behaviour, calling lifecycle events appropriately. */
-    void SetNavigationBehaviour(UNsUINavigationBehaviour* NewBehaviour);
+    /** Create and own a screen on the requested layer */
+    UFUNCTION(BlueprintCallable, Category="NsUI")
+    UUserWidget* OpenScreen(TSubclassOf<UUserWidget> ScreenClass, UObject* Context, ENsUILayer Layer = ENsUILayer::Menu);
 
-    /** Update the retro cursor to follow a widget. */
-    void UpdateCursorToWidget(UWidget* Widget);
-    /** Update the retro cursor to follow an actor. */
-    void UpdateCursorToActor(AActor* Actor);
-    /** Update the retro cursor to follow an arbitrary location. */
-    void UpdateCursorToLocation(const FVector& WorldLocation);
+    /** Close an owned screen; external widgets remain with their creator */
+    UFUNCTION(BlueprintCallable, Category="NsUI")
+    void CloseScreen(UUserWidget* Widget);
 
-    /** Project a widget into viewport space. */
-    FVector2D GetWidgetScreenPosition(UWidget* Widget) const;
-
-    /** Project an actor into viewport space. */
-    FVector2D GetActorScreenPosition(AActor* Actor) const;
-
-    /** Project a world-space location into viewport space. */
-    FVector2D GetLocationScreenPosition(const FVector& WorldLocation) const;
-
-    /** Retrieve the top-most active layer (Modal > Menu > Game). */
-    ENsUILayer GetTopActiveLayer() const;
-
-    /** Accessor for current navigation behaviour. */
-    UNsUINavigationBehaviour* GetActiveNavigationBehaviour() const { return ActiveNavigationBehaviour; }
-
-    /** Handle Hover Focus */
-    void HandleHoverFocus(UWidget* Widget);
-    /** Handle an intentional pointer-driven focus change inside the game viewport. */
-    void HandlePointerFocus(UWidget* Widget);
-    /** Resume viewport interaction without changing the currently selected widget. */
-    void ResumeViewportInteraction();
-    /** Temporarily suspend hover-driven focus updates until the mouse moves meaningfully again. */
-    void SuspendHoverFocusUntilMouseMove();
-    /** True when it is safe for NsUI to reclaim widget focus automatically. */
-    bool ShouldAutoRecoverWidgetFocus() const;
-    /** True when hover-driven mouse focus is temporarily suspended. */
-    bool IsHoverFocusSuspended() const { return bSuspendHoverFocusUntilExplicitViewportInteraction; }
-
-    /** Retrieve the top-most widget on a given layer. */
-    UUserWidget* GetTopWidgetOnLayer(ENsUILayer Layer) const;
-
-	/** True when a navigation behaviour is bound (meaning NsUI intends to own confirm/cancel/navigation). */
-	bool HasActiveNavigationBehaviour() const;
+    /** Close the owned screens on one layer */
+    UFUNCTION(BlueprintCallable, Category="NsUI")
+    void CloseAll(ENsUILayer Layer);
 
 private:
-    static bool IsCursorInsideGameViewport();
+    friend class FNsUISlateInputRouter;
+    friend class FNsUIInspector;
+    struct FScreenEntry;
 
-    /** Internal representation of a single layer's widget stack and focus history. */
-    struct FNsUILayerState
-    {
-        TWeakObjectPtr<UNsUILayer> LayerWidget;
-        TArray<TWeakObjectPtr<UUserWidget>> Stack;
-    };
+    void AddEntry(UUserWidget* Widget, UObject* Context, ENsUILayer Layer, bool bOwned);
+    void RemoveEntry(const TSharedPtr<FScreenEntry>& Entry, bool bRemoveWidget);
+    void OnWidgetAdded(UWidget* Widget, ULocalPlayer* Player);
+    void OnWidgetRemoved(UWidget* Widget);
+    void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+    void Reconcile();
+    void RecoverSelection();
+    void EnsurePresentation();
+    void RemovePresentation();
+    void ApplyInputPolicy();
+    void UpdateNavigationConfig();
+    void SetSuspended(bool bSuspend);
+    void ObserveFocus(const TSharedPtr<SWidget>& Widget);
+    bool Contains(const TSharedPtr<SWidget>& Widget) const;
+    bool IsScreenPopup(const TSharedPtr<SWidget>& Widget) const;
+    bool IsGameFocus(const TSharedPtr<SWidget>& Widget) const;
+    bool RouteAction(bool bConfirm);
+    bool UsesNativeNavigation() const;
+    bool ObservePointer(const FVector2D& AbsolutePosition);
+    bool RouteNavigate(EUINavigation Direction, bool bGamepad);
+    int32 GetUserIndex() const;
+    FString DescribeState() const;
 
-    UPROPERTY()
-    /** Currently instantiated layout widget (owns the cursor and per-layer containers). */
-    TObjectPtr<UNsUILayout> ActiveLayout;
+    UPROPERTY(Transient)
+    TObjectPtr<UNsUILayout> Layout;
 
-    UPROPERTY(EditDefaultsOnly, Category = "NsUI")
-    /** Layout class used when none is explicitly provided by the game. */
-    TSubclassOf<UNsUILayout> DefaultLayoutClass;
+    UPROPERTY(Transient)
+    TObjectPtr<UNsUICursor> Cursor;
 
-#if WITH_EDITORONLY_DATA
-    UPROPERTY()
-    /** Editor-only overlay showing focus and stack debugging information. */
-    TObjectPtr<class UNsUIDebugOverlay> DebugOverlay;
-#endif
-
-    /** Map of layer enum to stack state. */
-    TMap<ENsUILayer, FNsUILayerState> LayerStates;
-    /** Handles for Slate focus/tick delegates. */
-    FDelegateHandle FocusChangedHandle;
-    FDelegateHandle SlatePreTickHandle;
-
-    /** Currently bound navigation behaviour that receives confirm/hover/cancel/tick events. */
-    UPROPERTY()
-    TObjectPtr<UNsUINavigationBehaviour> ActiveNavigationBehaviour;
-
-    void EnsureLayout();
-    UNsUILayer* GetOrCreateLayerWidget(ENsUILayer Layer);
-
-    void SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
-    void SendKeyDownThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
-    void SendKeyUpThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState = FModifierKeysState());
-    TWeakPtr<SWidget> GetSlateFocus() const;
-    void HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget);
-    void UpdateCursorVisibility();
-    void SyncHoverFocusWithSlate(float InDeltaTime);
-    void OnSlatePreTick(float InDeltaTime);
-    void UpdateLayerHittestability();
-    void UpdatePlayerInputMode();
-    bool HasAnyWidgetsOnAnyLayer() const;
-    bool ShouldSuspendHoverFocus() const;
-
-#if WITH_EDITOR
-    void RefreshDebugOverlay();
-#endif
-
-    bool bSuspendHoverFocusUntilExplicitViewportInteraction = false;
-    bool bSuspendHoverFocusUntilMouseMove = false;
-    bool bWasCursorInsideViewportLastTick = false;
-    FVector2D LastCursorScreenPosition = FVector2D::ZeroVector;
+    TArray<TSharedPtr<FScreenEntry>> Screens;
+    TSharedPtr<FScreenEntry> Active;
+    TWeakObjectPtr<UUserWidget> PolicyOwner;
+    FDelegateHandle AddedHandle;
+    FDelegateHandle RemovedHandle;
+    FDelegateHandle CleanupHandle;
+    bool bSuspended = false;
+    bool bRecover = false;
+    bool bShuttingDown = false;
+    bool bInitialDiscovery = true;
+    bool bLogical = false;
+    bool bReconciling = false;
+    bool bReconcileAgain = false;
+    float RefreshElapsed = 0.f;
+    FString RecoveryReason;
+    TSharedPtr<FNavigationConfig> PreviousNavigation;
+    TSharedPtr<FNavigationConfig> Navigation;
+    TSharedPtr<SWidget> Presentation;
+    TWeakObjectPtr<UGameViewportClient> PresentationViewport;
+    int32 PresentationZOrder = 0;
 };

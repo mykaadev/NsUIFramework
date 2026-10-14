@@ -1,1072 +1,697 @@
 #include "NsUISubsystem.h"
-#include "CoreMinimal.h"
-#include "Blueprint/SlateBlueprintLibrary.h"
+
+#include "NsUICursor.h"
+#include "NsUILayout.h"
+#include "NsUILayer.h"
+#include "NsUIScreen.h"
+#include "NsUIDeveloperSettings.h"
+#include "NsUISlateInputRouter.h"
+#include "Selection/NsUISelectionMode.h"
+#include "Blueprint/GameViewportSubsystem.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/UserWidget.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
-#include "Engine/Engine.h"
+#include "Blueprint/SlateBlueprintLibrary.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Framework/Application/SlateApplication.h"
-#include "InputCoreTypes.h"
-#include "Kismet/GameplayStatics.h"
-#include "Math/NumericLimits.h"
-#include "Navigation/NsUIWidgetNavigationBehaviour.h"
-#include "NsUIDebugOverlay.h"
-#include "NsUICursor.h"
-#include "NsUILayer.h"
-#include "NsUILayout.h"
-#include "NsUINavigationBehaviour.h"
-#include "NsUISlateInputGuard.h"
-#include "NsUISlateNavigation.h"
-#include "Stats/Stats.h"
-#include "Widgets/SWidget.h"
+#include "Framework/Application/SlateUser.h"
+#include "Framework/Application/NavigationConfig.h"
+#include "Types/NavigationMetaData.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Widgets/SViewport.h"
+#include "Widgets/Layout/SConstraintCanvas.h"
+#include "Widgets/SCompoundWidget.h"
 
-static TSharedPtr<FNavigationConfig> GOriginalNavigationConfig;
-static TSharedPtr<IInputProcessor> GNavigationInputPreProcessor;
-
-bool UNsUISubsystem::IsCursorInsideGameViewport()
+namespace
 {
-    if (!FSlateApplication::IsInitialized() || !GEngine || GEngine->GameViewport == nullptr)
-    {
-        return false;
-    }
+class SNsUIInputRoot : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SNsUIInputRoot) {}
+        SLATE_DEFAULT_SLOT(FArguments, Content)
+    SLATE_END_ARGS()
 
-    const TSharedPtr<SViewport> GameViewportWidget = GEngine->GameViewport->GetGameViewportWidget();
-    if (!GameViewportWidget.IsValid())
-    {
-        return false;
-    }
-
-    FSlateApplication& SlateApplication = FSlateApplication::Get();
-    const FWidgetPath HoveredPath = SlateApplication.LocateWindowUnderMouse(
-        SlateApplication.GetCursorPos(),
-        SlateApplication.GetInteractiveTopLevelWindows());
-
-    return HoveredPath.IsValid() && HoveredPath.ContainsWidget(GameViewportWidget.Get());
+    void Construct(const FArguments& Args) { ChildSlot[Args._Content.Widget]; }
+    virtual bool SupportsKeyboardFocus() const override { return true; }
+};
 }
 
-UNsUISubsystem::UNsUISubsystem()
-    : ActiveLayout(nullptr)
-    , ActiveNavigationBehaviour(nullptr)
+struct UNsUISubsystem::FScreenEntry
 {
-    DefaultLayoutClass = UNsUILayout::StaticClass();
-}
-
-UNsUISubsystem* UNsUISubsystem::GetSubsystem()
-{
-    if (!GEngine)
-    {
-        return nullptr;
-    }
-
-    // Prefer the actual game viewport the user is looking at
-    if (const UGameViewportClient* Viewport = GEngine->GameViewport)
-    {
-        if (const UGameInstance* GameInstance = Viewport->GetGameInstance())
-        {
-            if (const ULocalPlayer* LocalPlayer = GameInstance->GetFirstGamePlayer())
-            {
-                return LocalPlayer->GetSubsystem<UNsUISubsystem>();
-            }
-        }
-    }
-
-    return nullptr;
-}
-
-void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
-{
-    Super::Initialize(Collection);
-
-    if (FSlateApplication::IsInitialized())
-    {
-        FocusChangedHandle = FSlateApplication::Get().OnFocusChanging().AddUObject(this, &UNsUISubsystem::HandleFocusChanged);
-        SlatePreTickHandle = FSlateApplication::Get().OnPreTick().AddUObject(this, &UNsUISubsystem::OnSlatePreTick);
-        GNavigationInputPreProcessor = CreateNsUINavigationInputPreProcessor(this);
-        FSlateApplication::Get().RegisterInputPreProcessor(GNavigationInputPreProcessor);
-
-        if (!GOriginalNavigationConfig.IsValid())
-        {
-            GOriginalNavigationConfig = FSlateApplication::Get().GetNavigationConfig();
-
-            const TSharedRef<FNavigationConfig> WrappedRef = GOriginalNavigationConfig.ToSharedRef();
-            const TSharedRef<FNavigationConfig> NsConfig = CreateNsUINavigationConfig(this, WrappedRef);
-
-            FSlateApplication::Get().SetNavigationConfig(NsConfig);
-        }
-    }
-}
-
-void UNsUISubsystem::Deinitialize()
-{
-    if (FSlateApplication::IsInitialized() && FocusChangedHandle.IsValid())
-    {
-        FSlateApplication::Get().OnFocusChanging().Remove(FocusChangedHandle);
-        FocusChangedHandle.Reset();
-    }
-
-    if (FSlateApplication::IsInitialized() && SlatePreTickHandle.IsValid())
-    {
-        FSlateApplication::Get().OnPreTick().Remove(SlatePreTickHandle);
-        SlatePreTickHandle.Reset();
-    }
-
-    if (FSlateApplication::IsInitialized() && GNavigationInputPreProcessor.IsValid())
-    {
-        FSlateApplication::Get().UnregisterInputPreProcessor(GNavigationInputPreProcessor);
-        GNavigationInputPreProcessor.Reset();
-    }
-
-    if (FSlateApplication::IsInitialized() && GOriginalNavigationConfig.IsValid())
-    {
-        FSlateApplication::Get().SetNavigationConfig(GOriginalNavigationConfig.ToSharedRef());
-        GOriginalNavigationConfig.Reset();
-    }
-
-    Super::Deinitialize();
-}
-
-void UNsUISubsystem::EnsureLayout()
-{
-    const UWorld* const World = GetWorld();
-    if (World == nullptr)
-    {
-        return;
-    }
-
-    const ULocalPlayer* LocalPlayer = GetLocalPlayer();
-    if (LocalPlayer == nullptr)
-    {
-        return;
-    }
-
-    // If the existing layout is for another world or is otherwise invalid, destroy it
-    if (ActiveLayout)
-    {
-        const bool bWrongWorld = ActiveLayout->GetWorld() != World;
-
-        const bool bSlateInvalid = !ActiveLayout->GetCachedWidget().IsValid();
-
-        if (bWrongWorld || bSlateInvalid)
-        {
-            ActiveLayout->RemoveFromParent();
-            ActiveLayout = nullptr;
-            if (bWrongWorld)
-            {
-                LayerStates.Empty();
-            }
-            else
-            {
-                for (TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
-                {
-                    Pair.Value.LayerWidget = nullptr;
-                }
-            }
-        }
-    }
-
-    // (Re)create layout if needed
-    if (!ActiveLayout)
-    {
-        TSubclassOf<UNsUILayout> LayoutClass = DefaultLayoutClass;
-        if (!LayoutClass)
-        {
-            LayoutClass = UNsUILayout::StaticClass();
-        }
-
-        ActiveLayout = CreateWidget<UNsUILayout>(LocalPlayer->GetPlayerController(World), LayoutClass);
-
-        if (ActiveLayout == nullptr)
-        {
-            return;
-        }
-
-        ActiveLayout->AddToViewport();
-
-        LayerStates.Empty();
-        for (ENsUILayer Layer : { ENsUILayer::Game, ENsUILayer::Menu, ENsUILayer::Modal })
-        {
-            FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
-            State.LayerWidget = ActiveLayout->GetLayerWidget(Layer);
-        }
-
-        if (!ActiveNavigationBehaviour)
-        {
-            SetNavigationBehaviour(NewObject<UNsUIWidgetNavigationBehaviour>(this));
-        }
-        else
-        {
-            if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
-            {
-                for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
-                {
-                    for (const TWeakObjectPtr<UUserWidget>& Screen : Pair.Value.Stack)
-                    {
-                        if (Screen.IsValid())
-                        {
-                            WidgetBehaviour->RegisterWidgetTree(Screen.Get());
-                        }
-                    }
-                }
-            }
-
-            ActiveNavigationBehaviour->OnEnter();
-        }
-
-        UpdateLayerHittestability();
-        UpdatePlayerInputMode();
-        UpdateCursorVisibility();
-        return;
-    }
-
-    // Existing layout: make sure it is hooked into viewport and layers are bound
-    if (!ActiveLayout->IsInViewport())
-    {
-        ActiveLayout->AddToViewport();
-    }
-
-    if (LayerStates.Num() == 0)
-    {
-        for (ENsUILayer Layer : { ENsUILayer::Game, ENsUILayer::Menu, ENsUILayer::Modal })
-        {
-            FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
-            State.LayerWidget = ActiveLayout->GetLayerWidget(Layer);
-        }
-    }
-
-    UpdateLayerHittestability();
-}
-
-UNsUILayer* UNsUISubsystem::GetOrCreateLayerWidget(ENsUILayer Layer)
-{
-    EnsureLayout();
-
-    if (FNsUILayerState* State = LayerStates.Find(Layer))
-    {
-        if (State->LayerWidget.IsValid())
-        {
-            return State->LayerWidget.Get();
-        }
-    }
-
-    if (ActiveLayout)
-    {
-        FNsUILayerState& State = LayerStates.FindOrAdd(Layer);
-        State.LayerWidget = ActiveLayout->GetLayerWidget(Layer);
-        return State.LayerWidget.Get();
-    }
-
-    return nullptr;
-}
-
-UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer)
-{
-    EnsureLayout();
-
-    if (!ScreenClass)
-    {
-        return nullptr;
-    }
-
-    UNsUILayer* LayerWidget = GetOrCreateLayerWidget(Layer);
-    if (!LayerWidget)
-    {
-        return nullptr;
-    }
-
-    ULocalPlayer* LocalPlayer = GetLocalPlayer();
-    UUserWidget* Screen = LocalPlayer ? CreateWidget<UUserWidget>(LocalPlayer->GetPlayerController(LocalPlayer->GetWorld()), ScreenClass) : nullptr;
-
-    if (!Screen)
-    {
-        return nullptr;
-    }
-
-    LayerWidget->AddScreen(Screen);
-    LayerStates.FindOrAdd(Layer).Stack.Add(Screen);
-    if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
-    {
-        WidgetBehaviour->RegisterWidgetTree(Screen);
-    }
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnWidgetAdded(Screen, Layer);
-    }
-
-    UpdateLayerHittestability();
-    UpdatePlayerInputMode();
-    UpdateCursorVisibility();
-
-#if WITH_EDITOR
-    RefreshDebugOverlay();
-#endif
-
-    return Screen;
-}
-
-UUserWidget* UNsUISubsystem::PushWidgetToLayer(TSoftClassPtr<UUserWidget> ScreenClass, ENsUILayer Layer)
-{
-    if (ScreenClass.IsNull())
-    {
-        return nullptr;
-    }
-
-    TSubclassOf<UUserWidget> LoadedClass = ScreenClass.LoadSynchronous();
-    return LoadedClass ? PushWidgetToLayer(LoadedClass, Layer) : nullptr;
-}
-
-void UNsUISubsystem::PopWidgetFromLayer(ENsUILayer Layer)
-{
-    EnsureLayout();
-
-    FNsUILayerState* State = LayerStates.Find(Layer);
-    if (!State || State->Stack.Num() == 0)
-    {
-        return;
-    }
-
-    UUserWidget* RemovedWidget = State->Stack.Pop().Get();
-    if (UNsUILayer* LayerWidget = State->LayerWidget.Get())
-    {
-        LayerWidget->RemoveScreen(RemovedWidget);
-    }
-
-    if (RemovedWidget)
-    {
-        RemovedWidget->RemoveFromParent();
-    }
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnWidgetRemoved(Layer, RemovedWidget);
-    }
-    UpdateLayerHittestability();
-    UpdatePlayerInputMode();
-    UpdateCursorVisibility();
-
-#if WITH_EDITOR
-    RefreshDebugOverlay();
-#endif
-}
-
-void UNsUISubsystem::PopAllWidgetsFromLayer(ENsUILayer Layer)
-{
-    EnsureLayout();
-
-    FNsUILayerState* State = LayerStates.Find(Layer);
-    if (!State)
-    {
-        return;
-    }
-
-    if (UNsUILayer* LayerWidget = State->LayerWidget.Get())
-    {
-        LayerWidget->ClearScreens();
-    }
-
-    State->Stack.Reset();
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnLayerCleared(Layer);
-    }
-
-    UpdateLayerHittestability();
-    UpdatePlayerInputMode();
-    UpdateCursorVisibility();
-
-#if WITH_EDITOR
-    RefreshDebugOverlay();
-#endif
-}
-
-void UNsUISubsystem::Navigate(EUINavigation Direction)
-{
-    SuspendHoverFocusUntilMouseMove();
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnNavigate(Direction);
-    }
-}
-
-void UNsUISubsystem::Confirm()
-{
-    ConfirmPressed(EKeys::Enter);
-    ConfirmReleased(EKeys::Enter);
-}
-
-void UNsUISubsystem::ConfirmPressed(const FKey& Key)
-{
-    SuspendHoverFocusUntilMouseMove();
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnConfirmPressed(Key);
-        return;
-    }
-
-    SendKeyDownThroughSlate(Key);
-}
-
-void UNsUISubsystem::ConfirmReleased(const FKey& Key)
-{
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnConfirmReleased(Key);
-        return;
-    }
-
-    SendKeyUpThroughSlate(Key);
-}
-
-void UNsUISubsystem::Cancel()
-{
-    SuspendHoverFocusUntilMouseMove();
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnCancel();
-        return;
-    }
-
-    SendKeyThroughSlate(EKeys::Escape);
-}
-
-void UNsUISubsystem::ForwardConfirmToSlate()
-{
-    if (IsForwardingSyntheticInputToSlate())
-    {
-        return;
-    }
-
-    SendKeyThroughSlate(EKeys::Enter);
-}
-
-void UNsUISubsystem::ForwardConfirmPressedToSlate(const FKey& Key)
-{
-    if (IsForwardingSyntheticInputToSlate())
-    {
-        return;
-    }
-
-    SendKeyDownThroughSlate(Key);
-}
-
-void UNsUISubsystem::ForwardConfirmReleasedToSlate(const FKey& Key)
-{
-    if (IsForwardingSyntheticInputToSlate())
-    {
-        return;
-    }
-
-    SendKeyUpThroughSlate(Key);
-}
-
-void UNsUISubsystem::ForwardCancelToSlate()
-{
-    if (IsForwardingSyntheticInputToSlate())
-    {
-        return;
-    }
-
-    SendKeyThroughSlate(EKeys::Escape);
-}
-
-void UNsUISubsystem::Tick(float DeltaTime)
-{
-    EnsureLayout();
-    UpdateCursorVisibility();
-
-#if WITH_EDITOR
-    if (DebugOverlay && DebugOverlay->GetVisibility() != ESlateVisibility::Collapsed)
-    {
-        RefreshDebugOverlay();
-    }
-#endif
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnTick(DeltaTime);
-    }
-}
-
-bool UNsUISubsystem::IsFrameworkActive() const
-{
-    if (ActiveNavigationBehaviour != nullptr)
-    {
-        return true;
-    }
-
-    if (!ActiveLayout)
-    {
-        return false;
-    }
-
-    for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
-    {
-        const TArray<TWeakObjectPtr<UUserWidget>>& Stack = Pair.Value.Stack;
-        if (Stack.Num() > 0)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
+    TStrongObjectPtr<UUserWidget> Widget;
+    TStrongObjectPtr<UObject> Context;
+    TStrongObjectPtr<UNsUISelectionMode> Mode;
+    FNsUIScreenConfig Config;
+    ESlateVisibility Visibility = ESlateVisibility::Visible;
+    bool bOwned = false;
+    bool bActivated = false;
+    bool bInterface = false;
+    TSharedPtr<FNavigationMetaData> OriginalNavigation;
+    TWeakPtr<SWidget> NavigationRoot;
+    TWeakObjectPtr<UWidget> LayoutTarget;
+    bool bHadLayout = false;
+};
 
 TStatId UNsUISubsystem::GetStatId() const
 {
     RETURN_QUICK_DECLARE_CYCLE_STAT(UNsUISubsystem, STATGROUP_Tickables);
 }
 
-void UNsUISubsystem::SetNavigationBehaviour(UNsUINavigationBehaviour* NewBehaviour)
+void UNsUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-    if (ActiveNavigationBehaviour == NewBehaviour)
+    Super::Initialize(Collection);
+    if (UGameViewportSubsystem* Viewport = UGameViewportSubsystem::Get())
     {
-        return;
+        AddedHandle = Viewport->OnWidgetAdded.AddUObject(this, &ThisClass::OnWidgetAdded);
+        RemovedHandle = Viewport->OnWidgetRemoved.AddUObject(this, &ThisClass::OnWidgetRemoved);
     }
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->OnExit();
-        ActiveNavigationBehaviour->SetOwningSubsystem(nullptr);
-    }
-
-    ActiveNavigationBehaviour = NewBehaviour;
-
-    if (ActiveNavigationBehaviour)
-    {
-        ActiveNavigationBehaviour->SetOwningSubsystem(this);
-        ActiveNavigationBehaviour->OnEnter();
-    }
-
-    UpdatePlayerInputMode();
-    UpdateCursorVisibility();
-
-#if WITH_EDITOR
-    RefreshDebugOverlay();
-#endif
+    CleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(this, &ThisClass::OnWorldCleanup);
 }
 
-void UNsUISubsystem::ToggleDebugOverlay()
+void UNsUISubsystem::Deinitialize()
 {
-#if WITH_EDITOR
-    EnsureLayout();
-
-    if (!ActiveLayout)
+    bShuttingDown = true;
+    if (UGameViewportSubsystem* Viewport = UGameViewportSubsystem::Get())
     {
-        return;
+        Viewport->OnWidgetAdded.Remove(AddedHandle);
+        Viewport->OnWidgetRemoved.Remove(RemovedHandle);
     }
-
-    if (!DebugOverlay)
+    FWorldDelegates::OnWorldCleanup.Remove(CleanupHandle);
+    const auto Snapshot = Screens;
+    for (const auto& Entry : Snapshot)
     {
-        DebugOverlay = CreateWidget<UNsUIDebugOverlay>(GetLocalPlayer()->GetPlayerController(GetLocalPlayer()->GetWorld()), UNsUIDebugOverlay::StaticClass());
-        if (DebugOverlay)
+        RemoveEntry(Entry, Entry->bOwned);
+    }
+    FNsUISlateInputRouter::ResetInputState(GetUserIndex());
+    RemovePresentation();
+    if (Cursor) { Cursor->RemoveFromParent(); }
+    Layout = nullptr;
+    Cursor = nullptr;
+    Super::Deinitialize();
+}
+
+void UNsUISubsystem::OnWorldCleanup(UWorld* World, bool, bool)
+{
+    const auto Snapshot = Screens;
+    for (const auto& Entry : Snapshot)
+    {
+        if (Entry->Widget->GetWorld() == World)
         {
-            DebugOverlay->AddToViewport(1000);
+            RemoveEntry(Entry, Entry->bOwned);
         }
     }
-    else
+    if (Layout && Layout->GetWorld() == World)
     {
-        const ESlateVisibility NewVisibility = DebugOverlay->GetVisibility() == ESlateVisibility::Collapsed ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
-        DebugOverlay->SetVisibility(NewVisibility);
+        RemovePresentation();
+        Layout = nullptr;
     }
-
-    RefreshDebugOverlay();
-#endif
+    if (Cursor && Cursor->GetWorld() == World)
+    {
+        Cursor->RemoveFromParent();
+        Cursor = nullptr;
+    }
+    FNsUISlateInputRouter::ResetInputState(GetUserIndex());
+    bInitialDiscovery = true;
+    bSuspended = false;
 }
 
-void UNsUISubsystem::HandleHoverFocus(UWidget* Widget)
+void UNsUISubsystem::EnsurePresentation()
 {
-    if (ShouldSuspendHoverFocus())
+    APlayerController* Player = GetLocalPlayer()->GetPlayerController(GetWorld());
+    if (!Player || !GetWorld()->IsGameWorld())
     {
         return;
     }
-
-    if (ActiveNavigationBehaviour)
+    if (!Layout)
     {
-        ActiveNavigationBehaviour->OnSlateHover(Widget);
-    }
-}
-
-void UNsUISubsystem::HandlePointerFocus(UWidget* Widget)
-{
-    bSuspendHoverFocusUntilExplicitViewportInteraction = false;
-    HandleHoverFocus(Widget);
-}
-
-void UNsUISubsystem::ResumeViewportInteraction()
-{
-    bSuspendHoverFocusUntilExplicitViewportInteraction = false;
-    bSuspendHoverFocusUntilMouseMove = false;
-}
-
-void UNsUISubsystem::SuspendHoverFocusUntilMouseMove()
-{
-    bSuspendHoverFocusUntilMouseMove = true;
-
-    if (FSlateApplication::IsInitialized())
-    {
-        LastCursorScreenPosition = FSlateApplication::Get().GetCursorPos();
-    }
-}
-
-void UNsUISubsystem::SendKeyThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState)
-{
-    if (!Key.IsValid() || !FSlateApplication::IsInitialized())
-    {
-        return;
-    }
-
-    // Prevent nested re-entry from stomping the flag back to false mid-call
-    if (IsForwardingSyntheticInputToSlate())
-    {
-        return;
-    }
-
-    FNsUISyntheticInputGuard ForwardingGuard;
-    const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : 0;
-    const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
-
-    FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
-    FSlateApplication::Get().ProcessKeyUpEvent(KeyEvent);
-}
-
-void UNsUISubsystem::SendKeyDownThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState)
-{
-    if (!Key.IsValid() || !FSlateApplication::IsInitialized())
-    {
-        return;
-    }
-
-    if (IsForwardingSyntheticInputToSlate())
-    {
-        return;
-    }
-
-    FNsUISyntheticInputGuard ForwardingGuard;
-    const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : 0;
-    const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
-    FSlateApplication::Get().ProcessKeyDownEvent(KeyEvent);
-}
-
-void UNsUISubsystem::SendKeyUpThroughSlate(const FKey& Key, const FModifierKeysState& ModifierState)
-{
-    if (!Key.IsValid() || !FSlateApplication::IsInitialized())
-    {
-        return;
-    }
-
-    if (IsForwardingSyntheticInputToSlate())
-    {
-        return;
-    }
-
-    FNsUISyntheticInputGuard ForwardingGuard;
-    const int32 UserIndex = GetLocalPlayer() ? GetLocalPlayer()->GetControllerId() : 0;
-    const FKeyEvent KeyEvent(Key, ModifierState, UserIndex, false, 0, 0);
-    FSlateApplication::Get().ProcessKeyUpEvent(KeyEvent);
-}
-
-TWeakPtr<SWidget> UNsUISubsystem::GetSlateFocus() const
-{
-    if (!FSlateApplication::IsInitialized())
-    {
-        return TWeakPtr<SWidget>();
-    }
-
-    return FSlateApplication::Get().GetUserFocusedWidget(0);
-}
-
-void UNsUISubsystem::HandleFocusChanged(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldPath, const TSharedPtr<SWidget>& InOldWidget, const FWidgetPath& InNewPath, const TSharedPtr<SWidget>& InNewWidget)
-{
-    if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
-    {
-        UWidget* NewFocusedWidget = WidgetBehaviour->ResolveWidgetFromSlate(InNewPath, InNewWidget);
-        WidgetBehaviour->OnSlateFocusChanged(IsValid(NewFocusedWidget) ? NewFocusedWidget : nullptr);
-
-        if (IsValid(NewFocusedWidget))
-        {
-            bSuspendHoverFocusUntilExplicitViewportInteraction = false;
-        }
-        else
-        {
-            const UWorld* World = GetWorld();
-            if (World && World->IsPlayInEditor() && GEngine && !GEngine->WorldIsPIEInNewViewport(const_cast<UWorld*>(World)))
+        Layout = CreateWidget<UNsUILayout>(Player);
+        const TWeakObjectPtr<ULocalPlayer> LocalPlayer = GetLocalPlayer();
+        Presentation = SNew(SNsUIInputRoot)
+            [SNew(SConstraintCanvas)
+            + SConstraintCanvas::Slot()
+            .Anchors_Lambda([LocalPlayer]()
             {
-                bSuspendHoverFocusUntilExplicitViewportInteraction = true;
+                return LocalPlayer.IsValid()
+                    ? FAnchors(LocalPlayer->Origin.X, LocalPlayer->Origin.Y,
+                        LocalPlayer->Origin.X + LocalPlayer->Size.X, LocalPlayer->Origin.Y + LocalPlayer->Size.Y)
+                    : FAnchors(0.f, 0.f, 1.f, 1.f);
+            })
+            .Offset(FMargin(0.f))
+            [Layout->TakeWidget()]];
+        PresentationViewport = GetWorld()->GetGameViewport();
+        PresentationZOrder = 0;
+        PresentationViewport->AddViewportWidgetContent(Presentation.ToSharedRef(), PresentationZOrder + 10);
+    }
+    if (!Cursor)
+    {
+        Cursor = CreateWidget<UNsUICursor>(Player);
+        Cursor->SetCursorBrush(Layout->GetCursorBrush());
+        Cursor->AddToViewport(MAX_int32 - 100);
+        Cursor->SetAlignmentInViewport(FVector2D(1.f, .5f));
+        Cursor->SetDesiredSizeInViewport(FVector2D(16.f, 16.f));
+    }
+}
+
+void UNsUISubsystem::RemovePresentation()
+{
+    if (Presentation && PresentationViewport.IsValid())
+    {
+        PresentationViewport->RemoveViewportWidgetContent(Presentation.ToSharedRef());
+    }
+    Presentation.Reset();
+    PresentationViewport.Reset();
+}
+
+UUserWidget* UNsUISubsystem::OpenScreen(TSubclassOf<UUserWidget> Class, UObject* Context, ENsUILayer Layer)
+{
+    if (!Class || bShuttingDown)
+    {
+        return nullptr;
+    }
+    EnsurePresentation();
+    if (!Layout)
+    {
+        return nullptr;
+    }
+    UUserWidget* Widget = CreateWidget<UUserWidget>(GetLocalPlayer()->GetPlayerController(GetWorld()), Class);
+    if (Widget)
+    {
+        Layout->GetLayerWidget(Layer)->AddScreen(Widget);
+        AddEntry(Widget, Context, Layer, true);
+    }
+    return Widget;
+}
+
+void UNsUISubsystem::AddEntry(UUserWidget* Widget, UObject* Context, ENsUILayer Layer, bool bOwned)
+{
+    if (bShuttingDown || Screens.ContainsByPredicate([&](const auto& Entry) { return Entry->Widget.Get() == Widget; }))
+    {
+        return;
+    }
+    const auto Entry = MakeShared<FScreenEntry>();
+    Entry->Widget.Reset(Widget);
+    Entry->Context.Reset(Context);
+    Entry->bOwned = bOwned;
+    Entry->bInterface = Widget->Implements<UNsUIScreen>();
+    Entry->Config = Entry->bInterface ? INsUIScreen::Execute_GetNsScreenConfig(Widget) : FNsUIScreenConfig();
+    if (bOwned) { Entry->Config.Layer = Layer; }
+    Entry->Visibility = Widget->GetVisibility();
+    UClass* ModeClass = Entry->Config.SelectionMode;
+    if (!ModeClass || ModeClass->HasAnyClassFlags(CLASS_Abstract))
+    {
+        ModeClass = UNsUIUMGSelectionMode::StaticClass();
+    }
+    Entry->Mode.Reset(NewObject<UNsUISelectionMode>(Widget, ModeClass));
+    Entry->Mode->Initialize(Widget);
+    Screens.Add(Entry);
+    // Set only the screen boundary. Child navigation rules remain unchanged.
+    const TSharedPtr<SWidget> Root = Widget->GetCachedWidget();
+    if (Root)
+    {
+        Entry->NavigationRoot = Root;
+        Entry->OriginalNavigation = Root->GetMetaData<FNavigationMetaData>();
+        auto Boundary = Entry->OriginalNavigation ? MakeShared<FNavigationMetaData>(*Entry->OriginalNavigation) : MakeShared<FNavigationMetaData>();
+        for (uint8 Direction = 0; Direction < static_cast<uint8>(EUINavigation::Num); ++Direction)
+        {
+            if (Boundary->GetBoundaryRule(static_cast<EUINavigation>(Direction)) == EUINavigationRule::Escape)
+            {
+                Boundary->SetNavigationStop(static_cast<EUINavigation>(Direction));
             }
         }
+        if (Entry->OriginalNavigation) { Root->RemoveMetaData(Entry->OriginalNavigation.ToSharedRef()); }
+        Root->AddMetadata(Boundary);
+    }
+    if (Entry->bInterface)
+    {
+        INsUIScreen::Execute_OnNsScreenOpened(Widget, Context, Entry->Mode.Get());
+    }
+    Reconcile();
+}
+
+void UNsUISubsystem::OnWidgetAdded(UWidget* Widget, ULocalPlayer* Player)
+{
+    UUserWidget* Screen = Cast<UUserWidget>(Widget);
+    if (!Screen || Screen->GetWorld() != GetWorld() || !GetWorld()->IsGameWorld() || !Screen->Implements<UNsUIScreen>())
+    {
+        return;
+    }
+    ULocalPlayer* Owner = Player ? Player : Screen->GetOwningLocalPlayer();
+    if (Owner != GetLocalPlayer())
+    {
+        return;
+    }
+    AddEntry(Screen, nullptr, ENsUILayer::Menu, false);
+}
+
+void UNsUISubsystem::OnWidgetRemoved(UWidget* Widget)
+{
+    const auto* Found = Screens.FindByPredicate([&](const auto& Entry) { return Entry->Widget.Get() == Widget; });
+    if (Found)
+    {
+        const auto Entry = *Found;
+        RemoveEntry(Entry, false);
     }
 }
 
-void UNsUISubsystem::OnSlatePreTick(float InDeltaTime)
+void UNsUISubsystem::CloseScreen(UUserWidget* Widget)
 {
-    SyncHoverFocusWithSlate(InDeltaTime);
+    const auto* Found = Screens.FindByPredicate([&](const auto& Entry) { return Entry->Widget.Get() == Widget && Entry->bOwned; });
+    if (Found)
+    {
+        const auto Entry = *Found;
+        RemoveEntry(Entry, true);
+    }
 }
 
-void UNsUISubsystem::SyncHoverFocusWithSlate(float InDeltaTime)
+void UNsUISubsystem::CloseAll(ENsUILayer Layer)
 {
-    FVector2D CursorPosition = LastCursorScreenPosition;
-    if (FSlateApplication::IsInitialized())
+    const auto Snapshot = Screens;
+    for (const auto& Entry : Snapshot)
     {
-        CursorPosition = FSlateApplication::Get().GetCursorPos();
-    }
-
-    const bool bCursorInsideViewport = IsCursorInsideGameViewport();
-
-    if (ShouldSuspendHoverFocus())
-    {
-        const bool bMouseMovedMeaningfully = FVector2D::Distance(CursorPosition, LastCursorScreenPosition) > 2.0f;
-
-        if (bSuspendHoverFocusUntilMouseMove && bMouseMovedMeaningfully)
+        if (Entry->bOwned && Entry->Config.Layer == Layer)
         {
-            bSuspendHoverFocusUntilMouseMove = false;
+            RemoveEntry(Entry, true);
         }
+    }
+}
 
-        if (bCursorInsideViewport)
+void UNsUISubsystem::RemoveEntry(const TSharedPtr<FScreenEntry>& Entry, bool bRemoveWidget)
+{
+    if (!Screens.Remove(Entry)) { return; }
+    if (const auto Root = Entry->NavigationRoot.Pin())
+    {
+        if (const auto Current = Root->GetMetaData<FNavigationMetaData>()) { Root->RemoveMetaData(Current.ToSharedRef()); }
+        if (Entry->OriginalNavigation) { Root->AddMetadata(Entry->OriginalNavigation.ToSharedRef()); }
+    }
+    Entry->Widget->SetVisibility(Entry->Visibility);
+    if (Entry->bInterface)
+    {
+        INsUIScreen::Execute_OnNsScreenClosed(Entry->Widget.Get());
+    }
+    if (bRemoveWidget) { Entry->Widget->RemoveFromParent(); }
+    Reconcile();
+}
+
+void UNsUISubsystem::Reconcile()
+{
+    if (bReconciling) { bReconcileAgain = true; return; }
+    TGuardValue<bool> Guard(bReconciling, true);
+    do
+    {
+        bReconcileAgain = false;
+        TSharedPtr<FScreenEntry> Next;
+        for (const auto& Entry : Screens)
         {
-            if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
+            if (Entry->Config.bInteractive && Entry->Widget->IsVisible() && Entry->Widget->GetIsEnabled()
+                && (!Next || Entry->Config.Layer >= Next->Config.Layer))
             {
-                if (WidgetBehaviour->GetCurrentFocusedWidget() == nullptr)
+                Next = Entry;
+            }
+        }
+        if (Active != Next)
+        {
+            const auto Previous = Active;
+            if (FSlateApplication::IsInitialized() && GetUserIndex() != INDEX_NONE)
+            {
+                const auto Focus = FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex());
+                if (IsScreenPopup(Focus)) { FSlateApplication::Get().DismissMenuByWidget(Focus.ToSharedRef()); }
+            }
+            Active = Next;
+            if (Previous && Screens.Contains(Previous) && Previous->bInterface)
+            {
+                INsUIScreen::Execute_OnNsScreenSuspended(Previous->Widget.Get());
+            }
+            if (Next && Screens.Contains(Next) && Next->bInterface && !bSuspended)
+            {
+                INsUIScreen::Execute_OnNsScreenActivated(Next->Widget.Get(), Next->bActivated);
+                Next->bActivated = true;
+            }
+            bRecover = true;
+            RecoveryReason = TEXT("Stack changed");
+            ApplyInputPolicy();
+        }
+        for (const auto& Entry : Screens)
+        {
+            if (Entry->Config.bInteractive && Entry->Widget->IsVisible())
+            {
+                Entry->Widget->SetVisibility(Entry == Active ? Entry->Visibility : ESlateVisibility::HitTestInvisible);
+            }
+        }
+        if (Presentation && PresentationViewport.IsValid())
+        {
+            UGameViewportSubsystem* Viewport = UGameViewportSubsystem::Get();
+            int32 ZOrder = 0;
+            if (Active && Active->bOwned)
+            {
+                for (const auto& Entry : Screens)
                 {
-                    if (UWidget* RecoveryWidget = WidgetBehaviour->GetRecoveryFocusedWidget())
+                    if (!Entry->bOwned)
                     {
-                        HandlePointerFocus(RecoveryWidget);
-                        bWasCursorInsideViewportLastTick = bCursorInsideViewport;
-                        LastCursorScreenPosition = CursorPosition;
-                        return;
+                        ZOrder = FMath::Max(ZOrder, FMath::Min(Viewport->GetWidgetSlot(Entry->Widget.Get()).ZOrder, MAX_int32 - 200) + 1);
                     }
                 }
             }
-
-            const bool bMouseMovedInsideViewport = bWasCursorInsideViewportLastTick
-                && FVector2D::Distance(CursorPosition, LastCursorScreenPosition) > 1.0f;
-
-            if (bMouseMovedInsideViewport && !bSuspendHoverFocusUntilMouseMove)
+            if (PresentationZOrder != ZOrder)
             {
-                bSuspendHoverFocusUntilExplicitViewportInteraction = false;
+                // Keep the Slate tree alive while changing its viewport order.
+                PresentationViewport->RemoveViewportWidgetContent(Presentation.ToSharedRef());
+                PresentationViewport->AddViewportWidgetContent(Presentation.ToSharedRef(), ZOrder + 10);
+                PresentationZOrder = ZOrder;
             }
         }
+    } while (bReconcileAgain);
+}
 
-        bWasCursorInsideViewportLastTick = bCursorInsideViewport;
-        LastCursorScreenPosition = CursorPosition;
+void UNsUISubsystem::ApplyInputPolicy()
+{
+    UpdateNavigationConfig();
+    if (bSuspended) { return; }
+    UUserWidget* Owner = Active ? Active->Widget.Get() : nullptr;
+    if (PolicyOwner.Get() == Owner) { return; }
+    PolicyOwner = Owner;
+    APlayerController* Player = GetLocalPlayer()->GetPlayerController(GetWorld());
+    if (!Player) { return; }
+    if (!Active)
+    {
+        Player->SetInputMode(FInputModeGameOnly());
+        Player->bShowMouseCursor = false;
+    }
+    else
+    {
+        const bool bGameplay = Active->Config.Gameplay == ENsUIGameplayPolicy::Allow
+            || (Active->Config.Gameplay == ENsUIGameplayPolicy::Automatic && Active->Config.Layer == ENsUILayer::Game);
+        if (bGameplay)
+        {
+            FInputModeGameAndUI Mode;
+            Mode.SetHideCursorDuringCapture(false);
+            Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+            Player->SetInputMode(Mode);
+        }
+        else
+        {
+            FInputModeUIOnly Mode;
+            Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+            Player->SetInputMode(Mode);
+        }
+        Player->bShowMouseCursor = true;
+    }
+}
+
+void UNsUISubsystem::UpdateNavigationConfig()
+{
+    const auto User = GetLocalPlayer()->GetSlateUser();
+    if (!User) { return; }
+    if (!Active || bSuspended || bShuttingDown)
+    {
+        if (Navigation && User->GetUserNavigationConfig() == Navigation)
+        {
+            User->SetUserNavigationConfig(PreviousNavigation);
+        }
+        Navigation.Reset();
+        PreviousNavigation.Reset();
         return;
     }
-
-    if (UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
+    const bool bGameplay = Active->Config.Gameplay == ENsUIGameplayPolicy::Allow
+        || (Active->Config.Gameplay == ENsUIGameplayPolicy::Automatic && Active->Config.Layer == ENsUILayer::Game);
+    if (Navigation)
     {
-        WidgetBehaviour->SyncHoverFocusWithSlate();
-    }
-
-    bWasCursorInsideViewportLastTick = bCursorInsideViewport;
-    LastCursorScreenPosition = CursorPosition;
-}
-
-FVector2D UNsUISubsystem::GetWidgetScreenPosition(UWidget* Widget) const
-{
-    if (Widget == nullptr || GetWorld() == nullptr || ActiveLayout == nullptr)
-    {
-        return FVector2D::ZeroVector;
-    }
-
-    const FGeometry& Geometry = Widget->GetCachedGeometry();
-
-    // Pick a point inside the widget using the anchor
-    const FVector2D Absolute = Geometry.GetAbsolutePosition() + (Geometry.GetAbsoluteSize() * ActiveLayout->GetCursorWidgetSnapAnchor());
-
-    FVector2D PixelPosition;
-    FVector2D InOutViewportPosition;
-    USlateBlueprintLibrary::AbsoluteToViewport(GetWorld(), Absolute, PixelPosition, InOutViewportPosition);
-    return InOutViewportPosition;
-}
-
-FVector2D UNsUISubsystem::GetActorScreenPosition(AActor* Actor) const
-{
-    if (!Actor || !GetWorld())
-    {
-        return FVector2D::ZeroVector;
-    }
-
-    ULocalPlayer* LP = GetLocalPlayer();
-    APlayerController* PC = LP ? LP->GetPlayerController(GetWorld()) : nullptr;
-    if (!PC)
-    {
-        return FVector2D::ZeroVector;
-    }
-
-    const FBox Bounds = Actor->GetComponentsBoundingBox(true);
-    const FVector WorldCenter = Bounds.IsValid ? Bounds.GetCenter() : Actor->GetActorLocation();
-
-    FVector2D Screen;
-    if (UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC, WorldCenter, Screen, true))
-    {
-        return Screen;
-    }
-
-    return FVector2D::ZeroVector;
-}
-
-FVector2D UNsUISubsystem::GetLocationScreenPosition(const FVector& WorldLocation) const
-{
-    if (!GetWorld())
-    {
-        return FVector2D::ZeroVector;
-    }
-
-    ULocalPlayer* LP = GetLocalPlayer();
-    APlayerController* PC = LP ? LP->GetPlayerController(GetWorld()) : nullptr;
-    if (!PC)
-    {
-        return FVector2D::ZeroVector;
-    }
-
-    FVector2D Screen;
-    if (UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC, WorldLocation, Screen, true))
-    {
-        return Screen;
-    }
-
-    return FVector2D::ZeroVector;
-}
-
-ENsUILayer UNsUISubsystem::GetTopActiveLayer() const
-{
-    const TArray<ENsUILayer> Priority = {ENsUILayer::Modal, ENsUILayer::Menu, ENsUILayer::Game};
-    for (ENsUILayer Layer : Priority)
-    {
-        if (const FNsUILayerState* State = LayerStates.Find(Layer))
-        {
-            if (State->Stack.Num() > 0)
-            {
-                return Layer;
-            }
-        }
-    }
-
-    return ENsUILayer::Game;
-}
-
-UUserWidget* UNsUISubsystem::GetTopWidgetOnLayer(ENsUILayer Layer) const
-{
-    if (const FNsUILayerState* State = LayerStates.Find(Layer))
-    {
-        if (State->Stack.Num() > 0)
-        {
-            return State->Stack.Last().Get();
-        }
-    }
-
-    return nullptr;
-}
-
-void UNsUISubsystem::UpdateLayerHittestability()
-{
-    const ENsUILayer TopLayer = GetTopActiveLayer();
-
-    for (TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
-    {
-        UNsUILayer* LayerWidget = Pair.Value.LayerWidget.Get();
-        if (!LayerWidget)
-        {
-            continue;
-        }
-
-        UBorder* RootPanel = LayerWidget->GetRootPanel();
-        if (!RootPanel)
-        {
-            continue;
-        }
-
-        const bool bHasWidgets = Pair.Value.Stack.Num() > 0;
-        if (!bHasWidgets)
-        {
-            RootPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-            continue;
-        }
-
-        const bool bIsTopLayer = Pair.Key == TopLayer;
-        RootPanel->SetVisibility(bIsTopLayer ? ESlateVisibility::Visible : ESlateVisibility::SelfHitTestInvisible);
-    }
-}
-
-void UNsUISubsystem::UpdateCursorToWidget(UWidget* Widget)
-{
-    EnsureLayout();
-
-    if (ActiveLayout && ActiveLayout->GetCursorWidget())
-    {
-        ActiveLayout->GetCursorWidget()->SetTargetWidget(Widget);
-    }
-}
-
-void UNsUISubsystem::UpdateCursorToActor(AActor* Actor)
-{
-    EnsureLayout();
-
-    if (ActiveLayout && ActiveLayout->GetCursorWidget())
-    {
-        ActiveLayout->GetCursorWidget()->SetTargetActor(Actor);
-    }
-}
-
-void UNsUISubsystem::UpdateCursorToLocation(const FVector& WorldLocation)
-{
-    EnsureLayout();
-
-    if (ActiveLayout && ActiveLayout->GetCursorWidget())
-    {
-        ActiveLayout->GetCursorWidget()->SetTargetLocation(WorldLocation);
-    }
-}
-
-void UNsUISubsystem::UpdateCursorVisibility()
-{
-    if (!ActiveLayout)
-    {
+        Navigation->bAnalogNavigation = !bGameplay;
         return;
     }
-
-    const bool bAnyWidgetsPresent = HasAnyWidgetsOnAnyLayer();
-
-    if (UNsUICursor* Cursor = ActiveLayout->GetCursorWidget())
+    PreviousNavigation = User->GetUserNavigationConfig();
+    const auto Base = PreviousNavigation ? PreviousNavigation.ToSharedRef() : FSlateApplication::Get().GetNavigationConfig();
+    Navigation = MakeShared<FNavigationConfig>(*Base);
+    Navigation->bKeyNavigation = true;
+    Navigation->bTabNavigation = true;
+    Navigation->bAnalogNavigation = !bGameplay;
+    Navigation->OnUserRemoved(GetUserIndex());
+    const auto* Settings = GetDefault<UNsUIDeveloperSettings>();
+    for (FKey Key : Settings->ConfirmKeys) { Navigation->KeyActionRules.Add(Key, EUINavigationAction::Accept); }
+    for (FKey Key : Settings->CancelKeys) { Navigation->KeyActionRules.Add(Key, EUINavigationAction::Back); }
+    const auto Add = [&](const TArray<FKey>& Keys, EUINavigation Direction)
     {
-        const bool bShouldShowCursor = bAnyWidgetsPresent && Cursor->HasTarget();
-        ActiveLayout->SetCursorVisibility(bShouldShowCursor);
-    }
+        for (FKey Key : Keys) { if (Key != EKeys::Tab) { Navigation->KeyEventRules.Add(Key, Direction); } }
+    };
+    Add(Settings->NavigateUpKeys, EUINavigation::Up);
+    Add(Settings->NavigateDownKeys, EUINavigation::Down);
+    Add(Settings->NavigateLeftKeys, EUINavigation::Left);
+    Add(Settings->NavigateRightKeys, EUINavigation::Right);
+    Add(Settings->NavigateNextKeys, EUINavigation::Next);
+    Add(Settings->NavigatePreviousKeys, EUINavigation::Previous);
+    User->SetUserNavigationConfig(Navigation);
 }
 
-bool UNsUISubsystem::HasAnyWidgetsOnAnyLayer() const
+int32 UNsUISubsystem::GetUserIndex() const
 {
-    for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
+    const auto User = GetLocalPlayer() ? GetLocalPlayer()->GetSlateUser() : nullptr;
+    return User ? User->GetUserIndex() : INDEX_NONE;
+}
+
+bool UNsUISubsystem::Contains(const TSharedPtr<SWidget>& Widget) const
+{
+    const auto Root = Active ? Active->Widget->GetCachedWidget() : nullptr;
+    for (auto Current = Widget; Current; Current = Current->GetParentWidget())
     {
-        if (Pair.Value.Stack.Num() > 0)
+        if (Current == Root) { return true; }
+    }
+    return IsScreenPopup(Widget);
+}
+
+bool UNsUISubsystem::IsScreenPopup(const TSharedPtr<SWidget>& Widget) const
+{
+    if (!Active || !Widget) { return false; }
+    auto& Slate = FSlateApplication::Get();
+    const auto Root = Active->Widget->GetCachedWidget();
+    for (auto Owner = Slate.GetMenuHostWidget(); Owner; Owner = Owner->GetParentWidget())
+    {
+        if (Owner == Root)
         {
-            return true;
+            FWidgetPath Path;
+            Slate.GeneratePathToWidgetUnchecked(Widget.ToSharedRef(), Path);
+            return Path.IsValid() && Slate.FindMenuInWidgetPath(Path).IsValid();
         }
     }
-
     return false;
 }
 
-bool UNsUISubsystem::ShouldAutoRecoverWidgetFocus() const
+bool UNsUISubsystem::IsGameFocus(const TSharedPtr<SWidget>& Widget) const
 {
-    if (ShouldSuspendHoverFocus())
+    if (IsScreenPopup(Widget)) { return true; }
+    const UGameViewportClient* Viewport = GetLocalPlayer()->ViewportClient;
+    const TSharedPtr<SViewport> GameWidget = Viewport ? Viewport->GetGameViewportWidget() : nullptr;
+    for (auto Current = Widget; Current; Current = Current->GetParentWidget())
     {
-        return false;
+        if (Current == GameWidget) { return true; }
+        for (const auto& Entry : Screens)
+        {
+            if (Current == Entry->Widget->GetCachedWidget()) { return true; }
+        }
     }
-
-    if (!HasAnyWidgetsOnAnyLayer())
-    {
-        return false;
-    }
-
-    const UWorld* World = GetWorld();
-    if (World == nullptr)
-    {
-        return false;
-    }
-
-    if (World->IsPlayInEditor() && GEngine && !GEngine->WorldIsPIEInNewViewport(const_cast<UWorld*>(World)))
-    {
-        return IsCursorInsideGameViewport();
-    }
-
-    return true;
+    return false;
 }
 
-bool UNsUISubsystem::ShouldSuspendHoverFocus() const
+void UNsUISubsystem::SetSuspended(bool bSuspend)
 {
-    return bSuspendHoverFocusUntilExplicitViewportInteraction || bSuspendHoverFocusUntilMouseMove;
+    if (bSuspended == bSuspend) { return; }
+    bSuspended = bSuspend;
+    UpdateNavigationConfig();
+    if (Active && Active->bInterface)
+    {
+        if (bSuspend) { INsUIScreen::Execute_OnNsScreenSuspended(Active->Widget.Get()); }
+        else { INsUIScreen::Execute_OnNsScreenActivated(Active->Widget.Get(), true); }
+    }
+    if (!bSuspend)
+    {
+        bRecover = true;
+        RecoveryReason = TEXT("Viewport activated");
+        ApplyInputPolicy();
+    }
+    else if (Cursor) { Cursor->Present(TOptional<FVector2D>(), 0.f); }
 }
 
-void UNsUISubsystem::UpdatePlayerInputMode()
+void UNsUISubsystem::ObserveFocus(const TSharedPtr<SWidget>& Widget)
 {
-    ULocalPlayer* LocalPlayer = GetLocalPlayer();
-    APlayerController* PlayerController = LocalPlayer ? LocalPlayer->GetPlayerController(GetWorld()) : nullptr;
-    if (PlayerController == nullptr)
+    if (!Active) { return; }
+    if (Contains(Widget))
     {
+        SetSuspended(false);
+        if (!bLogical) { Active->Mode->ObserveFocus(Widget); }
+    }
+    else if (Widget && !IsGameFocus(Widget))
+    {
+        SetSuspended(true);
+    }
+    else if (Widget && IsGameFocus(Widget))
+    {
+        SetSuspended(false);
+        bRecover = true;
+        RecoveryReason = TEXT("Viewport focus restored");
+    }
+    else if (!bSuspended)
+    {
+        bRecover = true;
+        RecoveryReason = TEXT("Focus left the active screen");
+    }
+}
+
+void UNsUISubsystem::RecoverSelection()
+{
+    bRecover = false;
+    const auto Entry = Active;
+    if (!Entry || bSuspended || GetUserIndex() == INDEX_NONE) { return; }
+    const FNsUISelectionRequest Request = Entry->bInterface
+        ? INsUIScreen::Execute_GetNsScreenSelection(Entry->Widget.Get()) : FNsUISelectionRequest();
+    bLogical = Request.Policy == ENsUISelectionPolicy::Logical;
+    if (!bLogical && IsScreenPopup(FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex()))) { return; }
+    if (bLogical)
+    {
+        if (Presentation && FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex()) != Presentation)
+        {
+            FSlateApplication::Get().SetUserFocus(GetUserIndex(), Presentation, EFocusCause::SetDirectly);
+        }
         return;
     }
-
-    if (HasAnyWidgetsOnAnyLayer())
+    if (Entry->Mode->Restore(Request.PreferredTarget))
     {
-        FInputModeGameAndUI InputMode;
-        InputMode.SetHideCursorDuringCapture(false);
-        InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-
-        if (const UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
+        if (UWidget* Target = Entry->Mode->GetFocusTarget())
         {
-            if (UWidget* FocusedWidget = WidgetBehaviour->GetCurrentFocusedWidget())
+            if (FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex()) != Target->GetCachedWidget())
             {
-                InputMode.SetWidgetToFocus(FocusedWidget->TakeWidget());
-            }
-            else if (UWidget* RecoveryWidget = WidgetBehaviour->GetRecoveryFocusedWidget())
-            {
-                InputMode.SetWidgetToFocus(RecoveryWidget->TakeWidget());
+                FSlateApplication::Get().SetUserFocus(GetUserIndex(), Target->GetCachedWidget(), EFocusCause::Navigation);
             }
         }
-        else if (UUserWidget* TopWidget = GetTopWidgetOnLayer(GetTopActiveLayer()))
+        else if (Presentation && FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex()) != Presentation)
         {
-            InputMode.SetWidgetToFocus(TopWidget->TakeWidget());
+            FSlateApplication::Get().SetUserFocus(GetUserIndex(), Presentation, EFocusCause::SetDirectly);
         }
-
-        PlayerController->SetInputMode(InputMode);
-        PlayerController->bShowMouseCursor = true;
-        PlayerController->bEnableClickEvents = true;
-        PlayerController->bEnableMouseOverEvents = true;
-        return;
     }
-
-    FInputModeGameOnly InputMode;
-    PlayerController->SetInputMode(InputMode);
 }
 
-#if WITH_EDITOR
-void UNsUISubsystem::RefreshDebugOverlay()
+void UNsUISubsystem::Tick(float DeltaTime)
 {
-    if (!DebugOverlay || !ActiveLayout)
+    if (bShuttingDown || !GetWorld() || !GetWorld()->IsGameWorld() || !FSlateApplication::IsInitialized()) { return; }
+    if (bInitialDiscovery)
     {
-        return;
-    }
-
-    TArray<FNsUILayerSnapshot> Snapshots;
-    for (const TPair<ENsUILayer, FNsUILayerState>& Pair : LayerStates)
-    {
-        FNsUILayerSnapshot Snapshot;
-        Snapshot.Layer = Pair.Key;
-
-        const TArray<TWeakObjectPtr<UUserWidget>>& Stack = Pair.Value.Stack;
-        for (TWeakObjectPtr<UUserWidget> WidgetPtr : Stack)
+        bInitialDiscovery = false;
+        TArray<UUserWidget*> Existing;
+        UWidgetBlueprintLibrary::GetAllWidgetsOfClass(GetWorld(), Existing, UUserWidget::StaticClass(), true);
+        Existing.StableSort([](const UUserWidget& A, const UUserWidget& B)
         {
-            Snapshot.WidgetNames.Add(WidgetPtr.IsValid() ? WidgetPtr->GetClass()->GetName() : TEXT("Invalid"));
-        }
-
-        Snapshot.FocusedIndex = INDEX_NONE;
-
-        Snapshots.Add(Snapshot);
+            return UGameViewportSubsystem::Get()->GetWidgetSlot(&A).ZOrder < UGameViewportSubsystem::Get()->GetWidgetSlot(&B).ZOrder;
+        });
+        for (UUserWidget* Widget : Existing) { OnWidgetAdded(Widget, Widget->GetOwningLocalPlayer()); }
     }
-
-    TArray<FString> AdditionalLines;
-    AdditionalLines.Add(FString::Printf(TEXT("FrameworkActive: %s"), IsFrameworkActive() ? TEXT("Yes") : TEXT("No")));
-    AdditionalLines.Add(FString::Printf(TEXT("TopLayer: %d"), static_cast<int32>(GetTopActiveLayer())));
-    AdditionalLines.Add(FString::Printf(TEXT("HoverSuspended: %s"), IsHoverFocusSuspended() ? TEXT("Yes") : TEXT("No")));
-    AdditionalLines.Add(FString::Printf(TEXT("CursorInViewport: %s"), IsCursorInsideGameViewport() ? TEXT("Yes") : TEXT("No")));
-
-    if (const UNsUIWidgetNavigationBehaviour* WidgetBehaviour = Cast<UNsUIWidgetNavigationBehaviour>(ActiveNavigationBehaviour))
+    const auto Snapshot = Screens;
+    for (const auto& Entry : Snapshot)
     {
-        const UWidget* FocusedWidget = WidgetBehaviour->GetCurrentFocusedWidget();
-        const UWidget* RecoveryWidget = WidgetBehaviour->GetRecoveryFocusedWidget();
-        AdditionalLines.Add(FString::Printf(TEXT("Focused: %s"), FocusedWidget ? *FocusedWidget->GetName() : TEXT("None")));
-        AdditionalLines.Add(FString::Printf(TEXT("Recovery: %s"), RecoveryWidget ? *RecoveryWidget->GetName() : TEXT("None")));
+        if ((Entry->bOwned && !Entry->Widget->GetParent()) || (!Entry->bOwned && !Entry->Widget->IsInViewport()))
+        {
+            RemoveEntry(Entry, false);
+        }
     }
-
-    DebugOverlay->SetAdditionalLines(AdditionalLines);
-    DebugOverlay->SetSnapshots(Snapshots);
+    Reconcile();
+    if (Active && !Navigation && !bSuspended) { ApplyInputPolicy(); }
+    if (Active && !bSuspended)
+    {
+        EnsurePresentation();
+        const auto Entry = Active;
+        const FNsUISelectionRequest Request = Entry->bInterface
+            ? INsUIScreen::Execute_GetNsScreenSelection(Entry->Widget.Get()) : FNsUISelectionRequest();
+        if (bLogical != (Request.Policy == ENsUISelectionPolicy::Logical))
+        {
+            bRecover = true;
+            RecoveryReason = TEXT("Selection policy changed");
+        }
+        RefreshElapsed += DeltaTime;
+        if (RefreshElapsed >= .1f)
+        {
+            RefreshElapsed = 0.f;
+            Entry->Mode->Refresh();
+            if (!bLogical && !Entry->Mode->HasSelection())
+            {
+                bRecover = true;
+                RecoveryReason = TEXT("Selection became unavailable");
+            }
+        }
+        if (bRecover) { RecoverSelection(); }
+        UWidget* Target = Entry->Mode->GetFocusTarget();
+        if (Entry->LayoutTarget.Get() != Target)
+        {
+            Entry->LayoutTarget = Target;
+            Entry->bHadLayout = false;
+        }
+        const bool bHasLayout = Target && !Target->GetCachedGeometry().GetLocalSize().IsNearlyZero();
+        if (bHasLayout && !Entry->bHadLayout)
+        {
+            bRecover = true;
+            RecoveryReason = TEXT("First target layout");
+        }
+        Entry->bHadLayout = bHasLayout;
+    }
+    if (Cursor)
+    {
+        FVector2D Position;
+        const bool bVisible = Active && !bSuspended && !bLogical && Active->Mode->GetCursorPosition(Position);
+        Cursor->Present(bVisible ? TOptional<FVector2D>(Position) : TOptional<FVector2D>(), DeltaTime);
+    }
 }
-#endif
 
+bool UNsUISubsystem::RouteAction(bool bConfirm)
+{
+    const auto Entry = Active;
+    if (!Entry || bSuspended) { return false; }
+    if (IsScreenPopup(FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex()))) { return false; }
+    if (Entry->bInterface && (bConfirm ? INsUIScreen::Execute_HandleNsScreenConfirm(Entry->Widget.Get())
+        : INsUIScreen::Execute_HandleNsScreenCancel(Entry->Widget.Get()))) { return true; }
+    if (Active != Entry || !Screens.Contains(Entry)) { return true; }
+    if (bConfirm ? Entry->Mode->Confirm() : Entry->Mode->Cancel()) { return true; }
+    if (!bConfirm && Entry->bOwned)
+    {
+        CloseScreen(Entry->Widget.Get());
+        return true;
+    }
+    if (bLogical || !Entry->Mode->GetFocusTarget()) { return true; }
+    if (!Contains(FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex())))
+    {
+        bRecover = true;
+        return true;
+    }
+    return false;
+}
+
+bool UNsUISubsystem::UsesNativeNavigation() const
+{
+    return Active && !bLogical && Active->Mode->UsesNativeNavigation();
+}
+
+bool UNsUISubsystem::ObservePointer(const FVector2D& AbsolutePosition)
+{
+    if (!Active || bSuspended || bLogical) { return false; }
+    FVector2D Pixels, Position;
+    USlateBlueprintLibrary::AbsoluteToViewport(GetWorld(), AbsolutePosition, Pixels, Position);
+    return Active->Mode->ObservePointer(Position);
+}
+
+bool UNsUISubsystem::RouteNavigate(EUINavigation Direction, bool bGamepad)
+{
+    const auto Entry = Active;
+    if (!Entry || bSuspended) { return false; }
+    if (bLogical || Entry->Mode->Navigate(Direction)) { return true; }
+    return !Entry->Mode->UsesNativeNavigation();
+}
+
+FString UNsUISubsystem::DescribeState() const
+{
+    FString Result = FString::Printf(TEXT("User: %d\nSuspended: %s\nRecovery: %s\n"), GetUserIndex(), bSuspended ? TEXT("Yes") : TEXT("No"), *RecoveryReason);
+    for (int32 Index = Screens.Num() - 1; Index >= 0; --Index)
+    {
+        const auto& Entry = Screens[Index];
+        Result += FString::Printf(TEXT("\n%s | Layer %d | %s | %s\n%s | %s\n"),
+            *Entry->Widget->GetName(), static_cast<int32>(Entry->Config.Layer),
+            Entry == Active ? (bLogical ? TEXT("Logical") : TEXT("Active")) : Entry->Config.bInteractive ? TEXT("Suspended") : TEXT("Passive"),
+            Entry->bOwned ? TEXT("Host") : TEXT("Viewport"), *Entry->Mode->GetClass()->GetName(), *Entry->Mode->DescribeSelection());
+    }
+    return Result;
+}

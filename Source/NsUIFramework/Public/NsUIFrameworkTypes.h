@@ -3,76 +3,44 @@
 #include "CoreMinimal.h"
 #include "NsUIFrameworkTypes.generated.h"
 
-class AActor;
 class UWidget;
+class UNsUISelectionMode;
 
-/**
- * High-level screen strata used by the retro UI stack. Widgets are pushed to a layer to
- * control ordering and input routing (e.g., gameplay HUD vs. pause menus vs. modals).
- */
 UENUM(BlueprintType)
-enum class ENsUILayer : uint8
-{
-    Game,
-    Menu,
-    Modal
-};
+enum class ENsUILayer : uint8 { Game, Menu, Modal };
 
-/**
- * Serialized snapshot of a layer's stack for save/restore flows. Exposed to Blueprints so
- * designer tooling can capture and reinstate UI state when swapping contexts.
- */
+UENUM(BlueprintType)
+enum class ENsUIGameplayPolicy : uint8 { Automatic, Allow, Block };
+
+UENUM(BlueprintType)
+enum class ENsUISelectionPolicy : uint8 { Automatic, Logical };
+
 USTRUCT(BlueprintType)
-struct FNsUILayerSnapshot
+struct NSUIFRAMEWORK_API FNsUIScreenConfig
 {
     GENERATED_BODY()
 
-    FNsUILayerSnapshot()
-        : Layer(ENsUILayer::Game)
-        , FocusedIndex(INDEX_NONE)
-    {
-    }
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    ENsUILayer Layer = ENsUILayer::Menu;
 
-    /** Layer the snapshot refers to. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
-    ENsUILayer Layer;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    bool bInteractive = true;
 
-    /** Ordered list of widget class names currently on the stack. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
-    TArray<FString> WidgetNames;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    ENsUIGameplayPolicy Gameplay = ENsUIGameplayPolicy::Automatic;
 
-    /** Index into WidgetNames that was focused when the snapshot was taken. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
-    int32 FocusedIndex;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    TSubclassOf<UNsUISelectionMode> SelectionMode;
 };
 
-/** Lightweight input source discriminator for cursor visibility heuristics. */
-enum class ENsUIInputSource : uint8
+USTRUCT(BlueprintType)
+struct NSUIFRAMEWORK_API FNsUISelectionRequest
 {
-    KeyboardGamepad,
-    Mouse
-};
+    GENERATED_BODY()
 
-/**
- * Struct used to gate synthetic keypresses that we do on our subsystem
- */
-struct FScopedNavConfigRestore
-{
-    /** Slate Application */
-    FSlateApplication& SlateApp;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    ENsUISelectionPolicy Policy = ENsUISelectionPolicy::Automatic;
 
-    /** Navigation Config */
-    TSharedRef<FNavigationConfig> SavedNavConfig;
-
-    /** Constructor */
-    FScopedNavConfigRestore(FSlateApplication& InApp, const TSharedRef<FNavigationConfig>& InSaved)
-        : SlateApp(InApp)
-        , SavedNavConfig(InSaved)
-    {}
-
-    /** Destructor */
-    ~FScopedNavConfigRestore()
-    {
-        SlateApp.SetNavigationConfig(SavedNavConfig);
-    }
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    TObjectPtr<UWidget> PreferredTarget = nullptr;
 };

@@ -1,14 +1,13 @@
 #include "NsUILayer.h"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/Border.h"
 #include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
 
 UNsUILayer::UNsUILayer(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
-    , RootPanel(nullptr)
-    , Layer(ENsUILayer::Game)
+    , RootOverlay(nullptr)
 {
     SetIsFocusable(false);
 }
@@ -20,56 +19,27 @@ TSharedRef<SWidget> UNsUILayer::RebuildWidget()
         WidgetTree = NewObject<UWidgetTree>(this, UWidgetTree::StaticClass(), TEXT("WidgetTree"));
     }
 
-    if (WidgetTree->RootWidget == nullptr)
+    RootOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
+    if (RootOverlay == nullptr)
     {
-        RootPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("LayerRoot"));
-        WidgetTree->RootWidget = RootPanel;
-
-        RootPanel->SetPadding(FMargin(0.f));
-        RootPanel->SetHorizontalAlignment(HAlign_Fill);
-        RootPanel->SetVerticalAlignment(VAlign_Fill);
-
-        // Kill the white background
-        FSlateBrush Brush;
-        //Brush.DrawAs = ESlateBrushDrawType::NoDrawType;
-        Brush.TintColor = FSlateColor(FLinearColor::Transparent); // FLinearColor::Transparent
-        RootPanel->SetBrush(Brush);
-
-        RootPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+        RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("LayerRoot"));
+        WidgetTree->RootWidget = RootOverlay;
     }
-    else
-    {
-        RootPanel = Cast<UBorder>(WidgetTree->RootWidget);
-    }
+
+    RootOverlay->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
     return Super::RebuildWidget();
 }
 
 void UNsUILayer::AddScreen(UUserWidget* Screen)
 {
-    if (RootPanel && Screen)
+    if (RootOverlay && Screen)
     {
-        RootPanel->AddChild(Screen);
+        UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(Screen);
+        if (OverlaySlot)
+        {
+            OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+            OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+        }
     }
-}
-
-void UNsUILayer::RemoveScreen(UUserWidget* Screen)
-{
-    if (RootPanel && Screen)
-    {
-        RootPanel->RemoveChild(Screen);
-    }
-}
-
-void UNsUILayer::ClearScreens()
-{
-    if (RootPanel)
-    {
-        RootPanel->ClearChildren();
-    }
-}
-
-void UNsUILayer::SetLayerType(ENsUILayer InLayer)
-{
-    Layer = InLayer;
 }

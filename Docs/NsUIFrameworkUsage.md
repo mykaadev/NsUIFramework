@@ -1,46 +1,67 @@
-# NsUI Framework Navigation Overview
+# NsUIFramework
 
-This guide explains the streamlined navigation model after removing focus targets. Each navigation behaviour owns its own state, keeping the subsystem lean while still exposing helpers for cursor placement and widget focus.
+## Screens
 
-## Core Concepts
-- **ENsUILayer** – Layered widget stacks (`Game`, `Menu`, `Modal`) managed by the subsystem.
-- **UNsUISubsystem** – Creates layouts, keeps the cursor alive, and forwards navigation/confirm/cancel/hover/focus changes directly to the active behaviour.
-- **UNsUINavigationBehaviour** – Base class for navigation policies. Behaviours receive `OnEnter`, `OnExit`, `OnTick`, `OnNavigate`, `OnConfirm`, `OnCancel`, plus widget stack notifications (`OnWidgetAdded/Removed/LayerCleared`) and Slate focus/hover hooks.
-- **Built-ins** – `UNsUIWidgetNavigationBehaviour` owns UMG focus history and spatial navigation; `UNsUIActorNavigationBehaviour` cycles through a supplied actor list; `UNsUILocationNavigationBehaviour` is a stub for location-based movement.
+One host manages interaction for each local player.
 
-## Typical Flows
-### Displaying Screens
 ```cpp
-UNsUISubsystem::GetSubsystem()->PushWidgetToLayer(MyScreenClass, ENsUILayer::Menu);
+UNsUISubsystem* UI = LocalPlayer->GetSubsystem<UNsUISubsystem>();
+UUserWidget* Screen = UI->OpenScreen(MenuClass, Context, ENsUILayer::Menu);
+UI->CloseScreen(Screen);
+UI->CloseAll(ENsUILayer::Modal);
 ```
-Blueprints expose the same calls via **NsUI** → `Push` (hard or soft class), with `Pop`/`PopAll` to unwind stacks. The active navigation behaviour is notified whenever screens are added or removed.
 
-### Navigation and Input
-- `Navigate` routes through the active navigation behaviour (UMG, actors, world locations, or anything custom).
-- `Confirm` and `Cancel` first hit the active behaviour; if none is set, they forward to Slate (Enter/Escape).
-- The subsystem installs a Slate navigation wrapper so arrows/Tab (directional + Next/Previous) and Enter/Escape (Accept/Back)
-  route through NsUI when the framework is active, and otherwise fall back to default UMG.
+The host owns screens opened through this API. Context stays alive until the screen closes.
 
-### Cursor Sync
-- UMG focus changes call `UpdateCursorToWidget` so the retro cursor follows the focused widget.
-- Actor behaviours can call `UpdateCursorToActor` each tick (or on change) to keep the cursor aligned with moving actors.
-- Use `UpdateCursorToLocation` for custom behaviours that operate on world-space points.
+A widget added with `AddToViewport` participates only when it implements `INsUIScreen`.
+Its creator still owns its removal. Host close commands do not remove external widgets.
+Discovery uses viewport events and one initial search. The host excludes preview worlds.
 
-### Actor Navigation Behaviour
-```cpp
-UNsUIActorNavigationBehaviour* Behaviour = NewObject<UNsUIActorNavigationBehaviour>(this);
-Behaviour->SetActors(MyActorArray);
-Subsystem->SetNavigationBehaviour(Behaviour);
-```
-`SetActors` stores the list and focuses the first entry. `OnNavigate` cycles forward/back, `OnTick` keeps the cursor projected to the current actor, and `OnConfirm`/`OnCancel` are intentionally empty for game-specific overrides.
+## Screen Contract
 
-### Custom Behaviours
-Derive from `UNsUINavigationBehaviour` to implement bespoke logic (e.g., grid locations, radial menus). Use the subsystem helpers to project positions for your cursor (`GetWidgetScreenPosition`, `GetActorScreenPosition`, `GetLocationScreenPosition`) and to move the retro cursor (`UpdateCursorToWidget/Actor/Location`). Behaviours receive widget stack notifications so they can maintain their own focus state without bloating the subsystem.
+Implement `INsUIScreen` without changing the Blueprint parent.
 
-## Blueprint Surface
-- Screen stack: `Push`, `Pop`, `PopAll`, `ToggleDebugOverlay`.
-- Behaviour control: `SetNavigationBehaviour`.
+- `GetNsScreenConfig`: layer, input participation, gameplay policy, and selection mode.
+- `OnNsScreenOpened`: context and the selection mode instance for this screen.
+- `OnNsScreenActivated`: activation, with a flag for resumed screens.
+- `OnNsScreenSuspended` and `OnNsScreenClosed`: interaction and lifetime changes.
+- `GetNsScreenSelection`: automatic selection, an optional preferred target, or logical input.
+- `HandleNsScreenConfirm` and `HandleNsScreenCancel`: return true when the screen consumes the action.
 
-## Debugging
-- `ToggleDebugOverlay` reveals layer stacks in-editor.
-- The subsystem ticks via `FTickableGameObject`, so behaviours receive `OnTick` even on engine versions where `ULocalPlayerSubsystem` lacks a tick override.
+Host screens use the layer passed to `OpenScreen`. External screens use their configuration.
+Set `bInteractive` to false for prompts and other passive screens.
+
+Automatic gameplay policy allows gameplay on Game and blocks it on Menu and Modal.
+Dialogue sets gameplay policy to Allow.
+Allow reserves analog sticks for gameplay. Digital directions still navigate the UI.
+
+Only the highest interactive screen receives input: Modal, then Menu, then Game.
+Within a layer, the last opened screen takes priority.
+Closing the active screen restores the previous valid selection.
+A preferred target does not replace a valid user selection.
+
+## Selection
+
+Each screen owns one `UNsUISelectionMode` instance, including while suspended.
+Extend this abstract class in C++. Modes do not own Slate hooks or input mode.
+
+- `UNsUIUMGSelectionMode`: nested widget trees, native control actions, and native navigation.
+- `UNsUIActorSelectionMode`: explicit weak actor references through `SetCandidates`.
+- `UNsUILocationSelectionMode`: explicit positions with unique, nonempty IDs through `SetCandidates`.
+
+Supply world candidates in `OnNsScreenOpened` or update the retained mode instance.
+World modes use screen projection. Candidate order resolves ties.
+Override mode actions to act on `GetSelectedActor` or `GetSelectedId`.
+
+The cursor follows the selected target. Logical input has no cursor.
+Selection recovery waits until after the Slate event.
+Editor interaction, Shift+F1, and application deactivation suspend recovery.
+
+## Editor
+
+`ns.UI.SmokeTest.Toggle` opens or closes the manual smoke screen.
+It includes menus, modals, viewport discovery, dynamic controls, actors, and locations.
+Confirm removes the selected smoke actor. Cancel closes a world selection screen.
+
+`ns.UI.Inspect` opens a read-only view of the stack, selection, and recovery reason.
+The editor tools do not change runtime routing.

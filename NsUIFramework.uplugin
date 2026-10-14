@@ -18,6 +18,11 @@
 			"Name": "NsUIFramework",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "NsUIFrameworkEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	]
 }
