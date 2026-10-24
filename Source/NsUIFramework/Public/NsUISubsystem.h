@@ -81,6 +81,8 @@ private:
     TArray<TSharedPtr<FScreenEntry>> Screens;
     TSharedPtr<FScreenEntry> Active;
     TWeakObjectPtr<UUserWidget> PolicyOwner;
+    /** True after a world cleanup: the next policy pass sets the input mode, also when no screen is active */
+    bool bPolicyDirty = true;
     FDelegateHandle AddedHandle;
     FDelegateHandle RemovedHandle;
     FDelegateHandle CleanupHandle;

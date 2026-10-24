@@ -115,6 +115,9 @@ void UNsUISubsystem::OnWorldCleanup(UWorld* World, bool, bool)
     FNsUISlateInputRouter::ResetInputState(GetUserIndex());
     bInitialDiscovery = true;
     bSuspended = false;
+    // The next world has a new player controller. Its input mode must be set once, also when no screen is active
+    bPolicyDirty = true;
+    PolicyOwner.Reset();
 }
 
 void UNsUISubsystem::EnsurePresentation()
@@ -367,12 +370,12 @@ void UNsUISubsystem::Reconcile()
 void UNsUISubsystem::ApplyInputPolicy()
 {
     UpdateNavigationConfig();
-    if (bSuspended) { return; }
     UUserWidget* Owner = Active ? Active->Widget.Get() : nullptr;
-    if (PolicyOwner.Get() == Owner) { return; }
-    PolicyOwner = Owner;
+    if (!bPolicyDirty && PolicyOwner.Get() == Owner) { return; }
     APlayerController* Player = GetLocalPlayer()->GetPlayerController(GetWorld());
     if (!Player) { return; }
+    bPolicyDirty = false;
+    PolicyOwner = Owner;
     if (!Active)
     {
         Player->SetInputMode(FInputModeGameOnly());
@@ -572,6 +575,8 @@ void UNsUISubsystem::RecoverSelection()
 void UNsUISubsystem::Tick(float DeltaTime)
 {
     if (bShuttingDown || !GetWorld() || !GetWorld()->IsGameWorld() || !FSlateApplication::IsInitialized()) { return; }
+    // A new world with no screen still needs its input mode once
+    if (bPolicyDirty) { ApplyInputPolicy(); }
     if (bInitialDiscovery)
     {
         bInitialDiscovery = false;

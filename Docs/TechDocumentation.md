@@ -64,7 +64,7 @@ The router runs before normal Slate input:
 - The subsystem ticks when the game is paused (`IsTickableWhenPaused` is true).
 - Selection recovery runs after Slate events, never inside one.
 - A selection mode instance stays alive while its screen is suspended.
-- On world cleanup, the subsystem removes its entries for that world.
+- On world cleanup, the subsystem removes its entries for that world. It also marks the input policy as dirty, so the next tick sets the input mode for the new player controller, also when no screen is active. Game code does not need its own `SetInputMode` call after a map change.
 
 ## Extension Points
 
@@ -104,4 +104,3 @@ No automated tests. Use the smoke test in an editor build:
 - Every studio project uses this plugin. Keep `INsUIScreen` and `UNsUISubsystem` signatures stable.
 - The layout class is fixed in code, so a project cannot change the cursor brush. A setting for it is a candidate feature.
 - Device detection and prompt icons belong in `NsInput`. An optional integration module can join them.
-- The old `Docs/NsUIFrameworkUsage.md` is replaced by `UserGuide.md` and this file.
