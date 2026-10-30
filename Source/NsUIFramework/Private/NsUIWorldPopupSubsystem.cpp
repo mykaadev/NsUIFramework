@@ -4,6 +4,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 
 void UNsUIWorldPopupSubsystem::Initialize(FSubsystemCollectionBase& Collection)

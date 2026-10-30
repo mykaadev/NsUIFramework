@@ -4,6 +4,7 @@
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "Tickable.h"
 #include "Types/SlateEnums.h"
+#include "Templates/SubclassOf.h"
 #include "NsUISubsystem.generated.h"
 
 class UUserWidget;

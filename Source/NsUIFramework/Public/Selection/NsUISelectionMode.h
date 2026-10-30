@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "InputCoreTypes.h"
+#include "Types/SlateEnums.h"
 #include "UObject/Object.h"
 #include "NsUISelectionMode.generated.h"
 

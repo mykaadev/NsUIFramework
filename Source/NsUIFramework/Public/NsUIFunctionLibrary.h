@@ -2,6 +2,7 @@
 
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "NsUIFrameworkTypes.h"
+#include "Templates/SubclassOf.h"
 #include "NsUIFunctionLibrary.generated.h"
 
 class APlayerController;

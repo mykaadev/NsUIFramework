@@ -2,6 +2,7 @@
 
 #include "GameFramework/HUD.h"
 #include "NsUIFrameworkTypes.h"
+#include "Templates/SubclassOf.h"
 #include "NsUIHUD.generated.h"
 
 class UUserWidget;

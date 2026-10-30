@@ -2,6 +2,7 @@
 
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "Tickable.h"
+#include "Templates/SubclassOf.h"
 #include "NsUIWorldPopupSubsystem.generated.h"
 
 class AActor;
