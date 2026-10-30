@@ -153,22 +153,3 @@ The `.uplugin` lists no plugin dependencies.
 ## Networking
 
 The plugin does not replicate. Each local player has its own subsystems.
-
-## Testing
-
-The plugin has no automated tests.
-
-Manual smoke test, in a Play In Editor session:
-
-1. Run `ns.UI.SmokeTest.Toggle`.
-2. Open a menu, then a modal. Make sure that only the modal gets input.
-3. Close the modal. Make sure that the selection goes back to the menu.
-4. Click **Viewport screen**. Make sure that the new screen gets input.
-5. Open the actor and location screens. Use them with a gamepad and with a mouse.
-6. Run `ns.UI.Inspect` and read the stack and the recovery reason.
-
-## Change Rules
-
-- Keep the names of `FNsUIScreenConfig`, `FNsUISelectionRequest`, `FNsUIStartScreen`, and the `UNsUIWorldPopupWidget` properties. Blueprints and assets save them.
-- Keep the `INsUIScreen` function names and signatures. Blueprint implementations bind to them by name.
-- Keep the values and the order of `ENsUILayer`. `Reconcile` compares layers by value.

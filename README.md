@@ -127,7 +127,7 @@ Modal comes first, then Menu, then Game. In one layer, the last screen to open h
 
 ## 📚 Documentation
 - [User Guide](https://mykaadev.github.io/plugins/nsuiframework/user-guide/) – Setup, common tasks, settings, and debug tools.
-- [Technical Documentation](https://mykaadev.github.io/plugins/nsuiframework/tech-documentation/) – Architecture, lifetime, extension points, and tests.
+- [Technical Documentation](https://mykaadev.github.io/plugins/nsuiframework/tech-documentation/) – Architecture, lifetime, and extension points.
 
 <!-- GH_ONLY_START -->
 ## ❤️ Credits
