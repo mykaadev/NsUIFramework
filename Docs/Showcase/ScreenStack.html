@@ -1,0 +1,13 @@
+<!-- Showcase for the website: the docs link to this file, and the site turns the list into a screen stack. -->
+<!-- Each list item is one example screen. data-layer is Game, Menu, or Modal. data-interactive="false" makes a passive screen. data-gameplay is Automatic, Allow, or Block. data-start="true" opens the screen at the start, in list order. -->
+<figure class="ns-uistack">
+  <figcaption>Open screens on the three layers, then push Back or Escape. The highest interactive screen gets input: Modal, then Menu, then Game. In one layer, the newest screen wins. The line under the layers shows the input mode.</figcaption>
+  <ul>
+    <li data-layer="Game" data-start="true"><b>Ability bar</b> Game layer, interactive. Gameplay input stays on.</li>
+    <li data-layer="Game" data-interactive="false" data-start="true"><b>Quest tracker</b> Game layer, passive. It never gets input.</li>
+    <li data-layer="Menu"><b>Pause menu</b> Menu layer. Gameplay input stops.</li>
+    <li data-layer="Menu" data-gameplay="Allow"><b>Dialogue</b> Menu layer, with Gameplay set to Allow. The player can still move.</li>
+    <li data-layer="Modal"><b>Quit prompt</b> Modal layer. It takes input over all menus.</li>
+  </ul>
+  <p>Back closes the active screen when no Cancel handler and no selection mode use the action. The demo screens have no Cancel handler and use the default selection mode. The demo holds 8 screens at most.</p>
+</figure>

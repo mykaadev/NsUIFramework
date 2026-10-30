@@ -6,6 +6,8 @@ NsUIFramework controls UI interaction for each local player. It opens and closes
 
 NsUIFramework does not style widgets, animate screens, detect the input device, or show input prompt icons. It does not replicate: each machine shows its own UI.
 
+[![Screens on the Game, Menu, and Modal layers, with the active screen and its input mode](Showcase/img/screenstack.png)](Showcase/ScreenStack.html)
+
 ## Setup
 
 1. Copy the `NsUIFramework` folder into the `Plugins` folder of your project.
