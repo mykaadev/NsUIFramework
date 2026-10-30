@@ -268,6 +268,19 @@ void UNsUISubsystem::CloseScreen(UUserWidget* Widget)
     }
 }
 
+UUserWidget* UNsUISubsystem::FindScreen(TSubclassOf<UUserWidget> ScreenClass) const
+{
+    for (int32 Index = Screens.Num() - 1; Index >= 0; --Index)
+    {
+        UUserWidget* Widget = Screens[Index]->Widget.Get();
+        if (Screens[Index]->bOwned && Widget && ScreenClass && Widget->IsA(ScreenClass))
+        {
+            return Widget;
+        }
+    }
+    return nullptr;
+}
+
 void UNsUISubsystem::CloseAll(ENsUILayer Layer)
 {
     const auto Snapshot = Screens;

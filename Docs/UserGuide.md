@@ -4,7 +4,7 @@
 
 NsUIFramework owns UI interaction in every studio project. It opens and closes screens on three layers, decides which screen gets input, moves the selection with keyboard, mouse, and gamepad, and routes Confirm and Back. It also sets the input mode and the mouse cursor.
 
-NsUIFramework does not style widgets, animate them, or show input prompt icons. Use the UI guides for style, `NsTween` for motion, and `NsInput` for prompt icons.
+NsUIFramework also shows floating texts over world points, for example "+3 coins". It does not style widgets, animate screens, or show input prompt icons. Use the UI guides for style, `NsTween` for motion, and `NsInput` for prompt icons.
 
 ## Setup
 
@@ -85,6 +85,33 @@ Location ids must be unique and not empty. Candidate order breaks ties.
 ### Use a widget made with AddToViewport
 
 The widget takes part only if it implements `INsUIScreen`. Its config sets its layer. The code that made it must also remove it. `CloseScreen` and `CloseAll` do not remove it.
+
+### Show a floating text in the world
+
+1. Make a widget Blueprint with `UNsUIWorldPopupWidget` as the parent. Add a text block named `PopupText`.
+2. In the class defaults, set the motion: `Lifetime`, `RiseSpeed`, `MaxDistance`, the fades, `PopScale`, `MaxActive`, and `StackHeight`.
+3. Call the subsystem of the local player:
+
+```cpp
+UNsUIWorldPopupSubsystem* const Popups = LocalPlayer->GetSubsystem<UNsUIWorldPopupSubsystem>();
+Popups->ShowPopup(PopupClass, FText::FromString(TEXT("+3 coins")), FVector(0.f, 0.f, 100.f), FLinearColor::Yellow, TargetActor);
+```
+
+With a follow actor, the location is an offset from that actor. Without one, the location is a world point. The popup is local to the player who calls it. A game that wants every player to see an event calls `ShowPopup` on every machine, for example from a replicated event.
+
+| Setting | Default |
+|---|---|
+| `Lifetime` | 1.2 s |
+| `RiseSpeed` | 45 cm/s |
+| `MaxDistance` | 3,000 cm |
+| `FadeInSeconds`, `FadeOutSeconds` | 0.1 s, 0.4 s |
+| `PopScale`, `PopSeconds` | 1, 0.2 s |
+| `bHideWhenBlocked` | true |
+| `MaxActive` | 4 for each class and player |
+| `StackHeight` | 30 cm |
+| `ViewportZOrder` | -100, under the screens |
+
+`OnPopupStarted` lets the Blueprint react to a new popup, for example to show an icon.
 
 ## Rules
 

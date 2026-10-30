@@ -1,6 +1,11 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Framework/Application/IInputProcessor.h"
+#include "Input/Events.h"
+#include "InputCoreTypes.h"
+#include "Layout/WidgetPath.h"
+#include "UObject/WeakObjectPtr.h"
 
 class UNsUISubsystem;
 class UUserWidget;

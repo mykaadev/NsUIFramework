@@ -6,7 +6,7 @@ Two modules.
 
 | Module | Type | Content |
 |---|---|---|
-| `NsUIFramework` | Runtime | The subsystem, the screen interface, the selection modes, the input router, the layout, and the cursor. |
+| `NsUIFramework` | Runtime | The subsystem, the screen interface, the selection modes, the input router, the layout, the cursor, and the world popups. |
 | `NsUIFrameworkEditor` | Editor | The `ns.UI.Inspect` and `ns.UI.SmokeTest.Toggle` commands and the smoke test widgets. |
 
 | Type | Role |
@@ -25,6 +25,19 @@ Two modules.
 | `UNsUILayout`, `UNsUILayer` | Private. The layout holds one overlay panel for each layer. |
 | `UNsUICursor` | Private. A non-hit-testable image that follows the selection. |
 | `UNsUIDeveloperSettings` | Keys and cursor motion. |
+| `UNsUIWorldPopupSubsystem` | Local player subsystem and conditional tickable object. It shows, moves, and pools floating texts over world points. |
+| `UNsUIWorldPopupWidget` | Abstract `UUserWidget` parent of one popup. It holds the motion values and the optional `PopupText`. |
+| `FNsUIWorldPopupEntry` | One active popup: the widget, the follow actor, the point or offset, and the age. |
+
+### World popups
+
+1. `ShowPopup` ends the oldest popup of the class when the class has `MaxActive` popups.
+2. It takes a pooled widget of the class for the same player controller, or makes one.
+3. It adds the widget to the player screen at `ViewportZOrder`, with the alignment (0.5, 1).
+4. A popup on an actor that has popups already starts `StackHeight` higher for each of them.
+5. Each tick moves the point up by `RiseSpeed`, applies the fade and the pop scale, and projects the point to the screen.
+6. The popup hides beyond `MaxDistance` from the camera, behind the camera, and, with `bHideWhenBlocked`, when a visibility trace from the camera hits something. The trace ignores the pawn of the player and the follow actor.
+7. At `Lifetime`, or when the follow actor goes away, the widget leaves the screen and goes back to the pool.
 
 ### Open flow
 
@@ -64,6 +77,7 @@ The router runs before normal Slate input:
 - The subsystem ticks when the game is paused (`IsTickableWhenPaused` is true).
 - Selection recovery runs after Slate events, never inside one.
 - A selection mode instance stays alive while its screen is suspended.
+- On world cleanup, the world popup subsystem drops its popups and pooled widgets of that world.
 - On world cleanup, the subsystem removes its entries for that world. It also marks the input policy as dirty, so the next tick sets the input mode for the new player controller, also when no screen is active. Game code does not need its own `SetInputMode` call after a map change.
 
 ## Extension Points
@@ -75,6 +89,7 @@ The router runs before normal Slate input:
 | `UNsUIWorldSelectionMode` | Override `GetCandidateCount` and `GetCandidatePosition` for a new world candidate source. |
 | `UNsUIDeveloperSettings` | Keys and cursor motion. |
 
+
 ## Dependencies
 
 Engine modules only: Slate, UMG, and input modules. No other studio plugin.
@@ -84,6 +99,7 @@ Engine modules only: Slate, UMG, and input modules. No other studio plugin.
 - The subsystem ticks each frame for cursor motion and recovery.
 - `Reconcile` runs on stack changes, not every frame.
 - World selection projects each candidate on navigation. Keep candidate lists small.
+- The world popup subsystem ticks only while a popup shows. Each popup does one projection and, with `bHideWhenBlocked`, one line trace each frame.
 
 ## Networking
 
@@ -102,5 +118,6 @@ No automated tests. Use the smoke test in an editor build:
 ## Change Rules
 
 - Every studio project uses this plugin. Keep `INsUIScreen` and `UNsUISubsystem` signatures stable.
+- Keep the `ShowPopup` signature stable. Game code calls it.
 - The layout class is fixed in code, so a project cannot change the cursor brush. A setting for it is a candidate feature.
 - Device detection and prompt icons belong in `NsInput`. An optional integration module can join them.

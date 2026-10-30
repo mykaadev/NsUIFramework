@@ -3,6 +3,7 @@
 #include "NsUIFrameworkTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "Tickable.h"
+#include "Types/SlateEnums.h"
 #include "NsUISubsystem.generated.h"
 
 class UUserWidget;
@@ -43,6 +44,10 @@ public:
     /** Close the owned screens on one layer */
     UFUNCTION(BlueprintCallable, Category="NsUI")
     void CloseAll(ENsUILayer Layer);
+
+    /** Return the newest owned screen of a class, or null */
+    UFUNCTION(BlueprintPure, Category="NsUI")
+    UUserWidget* FindScreen(TSubclassOf<UUserWidget> ScreenClass) const;
 
 private:
     friend class FNsUISlateInputRouter;
