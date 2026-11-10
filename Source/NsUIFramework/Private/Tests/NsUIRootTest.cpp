@@ -152,6 +152,7 @@ bool FNsUIRootTextTest::RunTest(const FString& Parameters)
     FSlateApplication::Get().ProcessKeyCharEvent(FCharacterEvent(TEXT('e'), FModifierKeysState(), 0, false));
     FNsUIRootTestBench::Press(EKeys::E);
     FNsUIRootTestBench::Press(EKeys::BackSpace);
+    FSlateApplication::Get().ProcessKeyCharEvent(FCharacterEvent(TEXT(''), FModifierKeysState(), 0, false));
     TestEqual(TEXT("Backspace stays in the text box"), Bench.BackCount, 0);
     TestEqual(TEXT("E stays in the text box"), Bench.PreviewConfirmCount, 0);
     TestEqual(TEXT("The text box got the keys"), Bench.Text->GetText().ToString(), FString());
@@ -173,10 +174,11 @@ bool FNsUIRootActionTest::RunTest(const FString& Parameters)
 
     FNsUIRootTestBench::Press(EKeys::Enter);
     TestEqual(TEXT("The handler sees Confirm first"), Bench.PreviewConfirmCount, 1);
+    TestEqual(TEXT("A Confirm that the handler did not use clicks the button"), Bench.ClickCount, 1);
 
     Bench.bHandleConfirm = true;
     FNsUIRootTestBench::Press(EKeys::Enter);
-    TestEqual(TEXT("A Confirm that the handler used never reaches the button"), Bench.ClickCount, 0);
+    TestEqual(TEXT("A Confirm that the handler used never reaches the button"), Bench.ClickCount, 1);
     TestEqual(TEXT("The handler saw the second Confirm"), Bench.PreviewConfirmCount, 2);
     return true;
 }
