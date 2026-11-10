@@ -6,6 +6,8 @@ NsUIFramework opens and closes the UI widgets of each local player. It decides w
 
 NsUIFramework does not style widgets and does not animate them. Use NsUIStyle for the look and NsTween for motion. It does not replicate: each machine shows its own UI.
 
+[![Widgets on the Game, Menu, and Modal layers, with the active widget and its input](Showcase/img/screenstack.png)](Showcase/ScreenStack.html)
+
 ## Setup
 
 1. Put the `NsUIFramework` folder in a plugin folder of the project.
