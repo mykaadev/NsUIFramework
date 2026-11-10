@@ -25,6 +25,7 @@ FNsUIFocusTracker::FNsUIFocusTracker(ULocalPlayer* const InPlayer, FOnFocusMoved
 FNsUIFocusTracker::~FNsUIFocusTracker()
 {
     FTSTicker::GetCoreTicker().RemoveTicker(RestoreHandle);
+    FTSTicker::GetCoreTicker().RemoveTicker(MovedHandle);
     if (FSlateApplication::IsInitialized())
     {
         FSlateApplication& Slate = FSlateApplication::Get();
@@ -59,7 +60,27 @@ void FNsUIFocusTracker::HandleFocusChanging(const FFocusEvent& Event, const FWea
     {
         SetSuspended(!IsInGameWindow(NewWidget));
     }
-    OnFocusMoved.ExecuteIfBound(OldWidget, NewWidget);
+
+    // Slate sends this event before the focus moves. The report waits for the next frame, so a listener that reads the focus sees the new one
+    if (!MovedHandle.IsValid())
+    {
+        MovedFrom = OldWidget;
+        MovedHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FNsUIFocusTracker::HandleMovedTick));
+    }
+}
+
+bool FNsUIFocusTracker::HandleMovedTick(float)
+{
+    MovedHandle.Reset();
+    const TSharedPtr<FSlateUser> User = Player.IsValid() ? Player->GetSlateUser() : nullptr;
+    const TSharedPtr<SWidget> Focus = User.IsValid() ? User->GetFocusedWidget() : nullptr;
+    const TSharedPtr<SWidget> From = MovedFrom.Pin();
+    MovedFrom.Reset();
+    if (Focus != From)
+    {
+        OnFocusMoved.ExecuteIfBound(From, Focus);
+    }
+    return false;
 }
 
 void FNsUIFocusTracker::HandleActivationChanged(const bool bActive)

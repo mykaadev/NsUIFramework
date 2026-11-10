@@ -153,6 +153,9 @@ private:
     /** Puts the focus where the active widget wants it */
     void ApplyFocus();
 
+    /** Tries the focus again while the root holds it as a fallback. Returns true when a control took the focus */
+    bool RetryFocus();
+
     /** Routes a UI action from the root. Preview is true before the focused control gets the key */
     bool RouteAction(ENsUIAction Action, bool bPreview, bool bGamepad);
 

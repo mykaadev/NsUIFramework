@@ -53,7 +53,7 @@ Each piece of data has one owner, and only the owner writes it.
 | Active widget | `FNsUIWidgetStack` | On open, close, and `RefreshConfig` |
 | Hit test and navigation boundary | `SNsUIWidgetSlot` | When the active widget changes. The framework never writes the visibility or the navigation metadata of a widget |
 | Input mode and mouse cursor | `UNsUISubsystem::ApplyInputPolicy` | On each active change, pointer mode change, and new player controller |
-| Navigation config of the player | `FNsUIInputActions` | When Enhanced Input rebuilds its mappings |
+| Navigation config of the player | `FNsUIInputActions`. It starts from the engine default keys and adds the UI action keys | When Enhanced Input rebuilds its mappings |
 | Focus | Slate. The framework writes it in `ApplyFocus`, `FocusChild`, and hover | Restore on the next frame when the focus leaves the active widget |
 | Last focused control | The entry of the widget, written in `HandleFocusMoved` and `FocusChild` | None |
 | Suspended state | `FNsUIFocusTracker` | On a focus change and on app activation |
@@ -73,6 +73,7 @@ The root and the focus tracker call the subsystem only through delegates that th
 - World cleanup removes the widgets of that world and the cursor. When no widget is left, it removes the root, because a map change removes all viewport widgets.
 - `Deinitialize` calls `OnClosed` on every widget, removes the root and the cursor, and gives back the navigation config.
 - Pause: the subsystem has no tick, so pause changes nothing. Input still works while the game is paused. World popups pause with the game.
+- Focus: Slate sends its focus event before the focus moves, so `FNsUIFocusTracker` reports the move on the next frame. A widget with no control that can take the focus leaves the focus on the root. `RestoreFocus`, or the next key on the root, tries the focus again.
 - Console: the engine moves the focus to the game viewport while the console is open. The framework does not restore the focus during that time.
 
 ## Extension Points

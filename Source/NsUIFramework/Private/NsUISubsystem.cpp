@@ -311,6 +311,15 @@ FString UNsUISubsystem::DescribeState() const
     FString Text = FString::Printf(TEXT("NsUI user %d | pointer %s | suspended %s"), GetUserIndex(),
         PointerMode == ENsUIPointerMode::Mouse ? TEXT("Mouse") : TEXT("Keys"),
         FocusTracker.IsValid() && FocusTracker->IsSuspended() ? TEXT("yes") : TEXT("no"));
+    if (InputActions.IsValid())
+    {
+        Text += FString::Printf(TEXT("\n  UI keys: %s"), *InputActions->DescribeKeys());
+    }
+    if (FSlateApplication::IsInitialized() && GetUserIndex() != INDEX_NONE)
+    {
+        const TSharedPtr<SWidget> Focus = FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex());
+        Text += FString::Printf(TEXT("\n  Focus: %s"), Focus.IsValid() ? *Focus->ToString() : TEXT("none"));
+    }
     if (!Stack.IsValid())
     {
         return Text;
@@ -346,7 +355,8 @@ void UNsUISubsystem::EnsureRoot()
         .OnAction(FNsUIRouteAction::CreateUObject(this, &ThisClass::RouteAction))
         .OnNavigate(FNsUIRouteNavigate::CreateUObject(this, &ThisClass::RouteNavigate))
         .OnPointer(FNsUIRoutePointer::CreateUObject(this, &ThisClass::RoutePointer))
-        .OnDevice(FNsUIReportDevice::CreateUObject(this, &ThisClass::HandleDeviceUsed));
+        .OnDevice(FNsUIReportDevice::CreateUObject(this, &ThisClass::HandleDeviceUsed))
+        .OnRequestFocus(FNsUIRequestFocus::CreateUObject(this, &ThisClass::RetryFocus));
     Viewport->AddViewportWidgetForPlayer(GetLocalPlayer(), Root.ToSharedRef(), GetDefault<UNsUISettings>()->RootZOrder);
 }
 
@@ -555,8 +565,13 @@ void UNsUISubsystem::ApplyFocus()
 {
     FNsUIWidgetEntry* const Active = Stack.IsValid() ? Stack->GetActive() : nullptr;
     const int32 UserIndex = GetUserIndex();
-    if (Active == nullptr || !Root.IsValid() || UserIndex == INDEX_NONE || FocusTracker->IsSuspended())
+    if (Active == nullptr || !Root.IsValid() || UserIndex == INDEX_NONE)
     {
+        return;
+    }
+    if (FocusTracker->IsSuspended())
+    {
+        UE_LOG(LogNsUI, Verbose, TEXT("ApplyFocus waits: the game window has no focus"));
         return;
     }
     const ENsUIInputPolicy Policy = Active->Config.InputPolicy;
@@ -579,6 +594,7 @@ void UNsUISubsystem::ApplyFocus()
     {
         return;
     }
+    UE_LOG(LogNsUI, Verbose, TEXT("ApplyFocus for %s, the focus was %s"), *Active->Widget->GetName(), Current.IsValid() ? *Current->GetTypeAsString() : TEXT("none"));
 
     TSharedPtr<SWidget> Target = Active->LastFocus.Pin();
     if (!CanFocus(Target) || !IsInside(Active->Slot, Target))
@@ -587,16 +603,34 @@ void UNsUISubsystem::ApplyFocus()
         const TSharedPtr<SWidget> Preferred = Request.PreferredTarget != nullptr ? Request.PreferredTarget->GetCachedWidget() : nullptr;
         Target = Preferred.IsValid() ? (CanFocus(Preferred) ? Preferred : FindFirstFocusable(Preferred.ToSharedRef())) : nullptr;
     }
-    if (!Target.IsValid() && Active->Slot.IsValid())
+    if (!CanFocus(Target) && Active->Slot.IsValid())
     {
         Target = FindFirstFocusable(Active->Slot.ToSharedRef());
+    }
+    // A control under a hidden or disabled panel cannot take the focus yet
+    if (!CanFocus(Target))
+    {
+        Target.Reset();
     }
     // A widget with no control keeps the focus on the root, so its keys still reach the handlers
     if (!Target.IsValid())
     {
+        UE_LOG(LogNsUI, Verbose, TEXT("%s has no control that can take the focus now. The root keeps it until a key or RestoreFocus"), *Active->Widget->GetName());
         Root->SetTakesFocus(true);
     }
+    UE_LOG(LogNsUI, Verbose, TEXT("ApplyFocus gives the focus to %s"), Target.IsValid() ? *Target->GetTypeAsString() : TEXT("the root"));
     Slate.SetUserFocus(UserIndex, Target.IsValid() ? Target : StaticCastSharedPtr<SWidget>(Root), EFocusCause::SetDirectly);
+}
+
+bool UNsUISubsystem::RetryFocus()
+{
+    const FNsUIWidgetEntry* const Active = Stack->GetActive();
+    if (Active == nullptr || Active->Mode != nullptr || Active->Config.FocusPolicy != ENsUIFocusPolicy::Children || GetUserIndex() == INDEX_NONE)
+    {
+        return false;
+    }
+    ApplyFocus();
+    return FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex()) != Root;
 }
 
 bool UNsUISubsystem::RouteAction(const ENsUIAction Action, const bool bPreview, const bool bGamepad)

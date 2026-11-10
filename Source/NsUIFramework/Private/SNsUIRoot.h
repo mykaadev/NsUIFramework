@@ -16,6 +16,9 @@ DECLARE_DELEGATE_RetVal_OneParam(bool, FNsUIRouteNavigate, EUINavigation);
 /** Gives a pointer event to the owner. Pressed is true for a button press. Returns true when the owner used it */
 DECLARE_DELEGATE_RetVal_TwoParams(bool, FNsUIRoutePointer, const FPointerEvent&, bool /*bPressed*/);
 
+/** Asks the owner to put the focus where the active widget wants it. Returns true when the focus moved away from the root */
+DECLARE_DELEGATE_RetVal(bool, FNsUIRequestFocus);
+
 /** Tells the owner which kind of device the player used. Gamepad is true for a gamepad key */
 DECLARE_DELEGATE_TwoParams(FNsUIReportDevice, ENsUIPointerMode, bool /*bGamepad*/);
 
@@ -62,6 +65,8 @@ public:
         SLATE_EVENT(FNsUIRoutePointer, OnPointer)
         /** Gets the kind of device that the player used */
         SLATE_EVENT(FNsUIReportDevice, OnDevice)
+        /** Puts the focus where the active widget wants it */
+        SLATE_EVENT(FNsUIRequestFocus, OnRequestFocus)
     SLATE_END_ARGS()
 
     /** Constructor */
@@ -120,6 +125,9 @@ private:
 
     /** Gets the kind of device that the player used */
     FNsUIReportDevice OnDevice;
+
+    /** Puts the focus where the active widget wants it */
+    FNsUIRequestFocus OnRequestFocus;
 
     /** True while the root itself can have the focus */
     bool bTakesFocus;

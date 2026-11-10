@@ -74,6 +74,7 @@ void FNsUIInputActions::ReadKeys()
             ActionOfKey.Add(Key, Pair.Key);
         }
     }
+    UE_LOG(LogNsUI, Log, TEXT("NsUI read %d UI keys from Enhanced Input"), ActionOfKey.Num());
     BuildNavigation();
 }
 
@@ -94,6 +95,16 @@ TArray<FKey> FNsUIInputActions::GetKeys(const ENsUIAction Action) const
         }
     }
     return Keys;
+}
+
+FString FNsUIInputActions::DescribeKeys() const
+{
+    FString Text;
+    for (const TPair<FKey, ENsUIAction>& Pair : ActionOfKey)
+    {
+        Text += FString::Printf(TEXT("%s=%s "), *Pair.Key.ToString(), *StaticEnum<ENsUIAction>()->GetNameStringByValue(static_cast<int64>(Pair.Value)));
+    }
+    return Text.IsEmpty() ? TEXT("none") : Text;
 }
 
 void FNsUIInputActions::InstallNavigation(const bool bAnalog)
@@ -134,12 +145,11 @@ void FNsUIInputActions::RemoveNavigation()
 void FNsUIInputActions::BuildNavigation()
 {
     const bool bAnalog = Navigation.IsValid() ? Navigation->bAnalogNavigation : true;
+    // The engine default keys stay (arrows, D-pad, Enter, Escape), so the UI works also before Enhanced Input gives its keys. The UI actions add their keys
     TSharedRef<FNavigationConfig> Config = MakeShared<FNavigationConfig>();
     Config->bKeyNavigation = true;
     Config->bTabNavigation = true;
     Config->bAnalogNavigation = bAnalog;
-    Config->KeyEventRules.Reset();
-    Config->KeyActionRules.Reset();
     for (const TPair<FKey, ENsUIAction>& Pair : ActionOfKey)
     {
         switch (Pair.Value)

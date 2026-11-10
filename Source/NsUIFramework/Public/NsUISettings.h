@@ -25,7 +25,7 @@ public:
     UPROPERTY(Config, EditAnywhere, Category = "Input")
     TSoftObjectPtr<class UInputMappingContext> InputMappingContext;
 
-    /** The priority of the UI mapping context. The UI actions do not consume input, so the priority changes nothing for the game */
+    /** The priority of the UI mapping context. Keep it above the game contexts: Enhanced Input drops a key from a lower context when a higher context maps it to an action that consumes input. The UI actions do not consume input, so the game keeps its keys */
     UPROPERTY(Config, EditAnywhere, Category = "Input")
     int32 InputMappingPriority;
 

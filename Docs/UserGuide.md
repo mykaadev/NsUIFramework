@@ -54,7 +54,7 @@ Use `NsUIWidget` as the parent. A widget with another parent can implement the i
 | `On Activated` | The widget gets input. **Resumed** is true when it had input before. |
 | `On Deactivated` | A higher widget took the input. The widget stays open. |
 | `On Closed` | The widget closed. Release resources. |
-| `On Focus Changed` | The focus moved to another control. Use it for the focus look and the focus sound. |
+| `On Focus Changed` | The focus moved to another control. Use it for the focus look and the focus sound. It comes on the frame after the move, so `HasAnyUserFocus` already gives the new control. |
 | `Handle Confirm` | Return true to use Confirm before the focused control gets it. |
 | `Handle Back` | Return true to use Back. Without it, Back closes the widget. |
 | `Handle Navigate` | Return true to use a direction before the focus moves, for example to pan a map. |
@@ -104,6 +104,8 @@ Call `Is Widget Open`, `Find Widget`, or `Get Active Widget`. Do not test the pa
 
 Call `Focus Child` with the widget and the control. Call `Restore Focus` to go back to the last focused control.
 
+A widget that hides or disables its controls when it opens, for example behind a loading screen, calls `Restore Focus` when the controls show. Until then the root holds the focus, and the first key also tries the focus again.
+
 ### Take all input in the widget itself
 
 In `Get Config`, set **Focus Policy** to `Self`. No control takes the focus, and the handlers get Confirm, Back, the directions, and the tabs.
@@ -147,7 +149,7 @@ Make a Blueprint child of `NsUIHUD`, fill **Start Widgets**, and set it as the H
 | Setting | Default | Effect |
 |---|---|---|
 | **Input Mapping Context** | None | The mapping context of the UI keys. The framework adds it to each player. |
-| **Input Mapping Priority** | 0 | The priority of the UI mapping context. |
+| **Input Mapping Priority** | 1000 | The priority of the UI mapping context. Keep it above the game contexts, or Enhanced Input drops UI keys that a game action consumes. |
 | **Input Actions** | None | The Enhanced Input action of each UI action. |
 | **Cursor Widget Class** | None | The selection cursor. None shows no selection cursor. |
 | **Root Z Order** | 10 | The viewport order of the UI root. |
@@ -209,6 +211,8 @@ Tab and Shift+Tab move the focus to the next and the previous control. The stick
 | Problem | Cause | Fix |
 |---|---|---|
 | The UI has no keys, and the log shows an `Error` | The settings have no mapping context or input actions. | Do Setup step 5. |
+| Some UI keys do nothing, for example E or Escape | A game mapping context with a higher priority maps the key to an action that consumes input. | Raise **Input Mapping Priority**. `ns.UI.Inspect` lists the UI keys that the framework read. |
+| The arrows do nothing when a widget opens | The controls were hidden or disabled when the widget got input. | Call `Restore Focus` when the controls show. |
 | The game loses a key while the UI is open | A UI input action consumes input. | Turn off **Consume Input** on the action. |
 | `Open Widget` returns None | The player has no player controller yet. | Open the widget from the player controller or the HUD. |
 | A widget shows but takes no input | A higher widget is active, or the widget is `Passive`. | Close the higher widget, or change the policy. |

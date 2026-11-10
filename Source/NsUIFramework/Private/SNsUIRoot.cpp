@@ -31,6 +31,7 @@ void SNsUIRoot::Construct(const FArguments& Args)
     OnNavigate = Args._OnNavigate;
     OnPointer = Args._OnPointer;
     OnDevice = Args._OnDevice;
+    OnRequestFocus = Args._OnRequestFocus;
     bTakesFocus = false;
 
     TSharedRef<SOverlay> LayerStack = SNew(SOverlay);
@@ -50,6 +51,12 @@ FReply SNsUIRoot::OnPreviewKeyDown(const FGeometry& MyGeometry, const FKeyEvent&
     if (IsConsoleOpen() || !OnFindAction.IsBound())
     {
         return FReply::Unhandled();
+    }
+
+    // The root holds the focus only as a fallback, for example while the controls of a widget wait to show. A key tries the focus again, and the first key only selects
+    if (HasKeyboardFocus() && OnRequestFocus.IsBound() && OnRequestFocus.Execute())
+    {
+        return FReply::Handled();
     }
 
     const TOptional<ENsUIAction> Action = OnFindAction.Execute(KeyEvent.GetKey());

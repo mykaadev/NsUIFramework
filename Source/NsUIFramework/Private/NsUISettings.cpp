@@ -7,7 +7,7 @@
 UNsUISettings::UNsUISettings()
 {
     CategoryName = TEXT("Plugins");
-    InputMappingPriority = 0;
+    InputMappingPriority = 1000;
     RootZOrder = 10;
     CursorZOrder = 1000;
     PointerPickRadius = 24.f;

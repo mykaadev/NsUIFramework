@@ -28,6 +28,9 @@ public:
     /** Returns the keys of a UI action */
     TArray<FKey> GetKeys(ENsUIAction Action) const;
 
+    /** Returns the UI keys as text, for debug */
+    FString DescribeKeys() const;
+
     /** Installs the navigation config of the UI keys. Analog true lets the sticks move the focus */
     void InstallNavigation(bool bAnalog);
 

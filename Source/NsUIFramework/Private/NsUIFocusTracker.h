@@ -43,6 +43,9 @@ private:
     /** Runs the restore that RequestRestore asked for */
     bool HandleRestoreTick(float DeltaSeconds);
 
+    /** Reports the focus move on the frame after the Slate event, when the new focus is in place */
+    bool HandleMovedTick(float DeltaSeconds);
+
     /** Sets the suspended state and reports a change */
     void SetSuspended(bool bInSuspended);
 
@@ -71,6 +74,12 @@ private:
 
     /** The pending restore on the core ticker */
     FTSTicker::FDelegateHandle RestoreHandle;
+
+    /** The pending focus report on the core ticker */
+    FTSTicker::FDelegateHandle MovedHandle;
+
+    /** The focused widget before the first focus move of this frame */
+    TWeakPtr<class SWidget> MovedFrom;
 
     /** True while the game viewport of the player has no focus */
     bool bSuspended;
