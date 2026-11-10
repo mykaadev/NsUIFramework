@@ -47,4 +47,8 @@ public:
     /** Return true to consume Cancel before the host default */
     UFUNCTION(BlueprintNativeEvent, Category="NsUI")
     bool HandleNsScreenCancel();
+
+    /** Return true to consume a direction before the selection mode, for example to pan a map */
+    UFUNCTION(BlueprintNativeEvent, Category="NsUI")
+    bool HandleNsScreenNavigate(EUINavigation Direction);
 };

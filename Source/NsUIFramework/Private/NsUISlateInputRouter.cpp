@@ -92,6 +92,7 @@ bool FNsUISlateInputRouter::HandleKeyDownEvent(FSlateApplication& Slate, const F
         // Standard controls retain native Slate press and release handling.
         return false;
     }
+    if (Host->IsActiveGameInputOnly()) { return false; }
     EUINavigation Direction = EUINavigation::Invalid;
     if (Settings->NavigateUpKeys.Contains(Event.GetKey())) { Direction = EUINavigation::Up; }
     else if (Settings->NavigateDownKeys.Contains(Event.GetKey())) { Direction = EUINavigation::Down; }

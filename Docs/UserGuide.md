@@ -252,3 +252,11 @@ In the actor selection screen of the smoke test, Confirm destroys the selected a
 - The actor and location selection modes take their candidates from C++ only. Blueprint cannot extend `NsUISelectionMode`.
 - No device detection and no prompt icons.
 - The screen subsystem works only in game worlds.
+
+### Use the direction keys on a screen
+
+Implement `HandleNsScreenNavigate` of `INsUIScreen`, and return true to consume a direction. A map uses this to pan.
+
+### A screen that only shows during play
+
+Set `bGameInputOnly` in the screen config. The game view keeps the focus, so keys that the player holds stay held. Directions go to the game. Confirm and Cancel go to the game when the handler of the screen returns false.

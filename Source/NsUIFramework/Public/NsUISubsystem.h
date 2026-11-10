@@ -73,6 +73,9 @@ private:
     bool IsGameFocus(const TSharedPtr<SWidget>& Widget) const;
     bool RouteAction(bool bConfirm);
     bool UsesNativeNavigation() const;
+
+    /** Returns true when the active screen leaves all input that it does not use to the game */
+    bool IsActiveGameInputOnly() const;
     bool ObservePointer(const FVector2D& AbsolutePosition);
     bool RouteNavigate(EUINavigation Direction, bool bGamepad);
     int32 GetUserIndex() const;

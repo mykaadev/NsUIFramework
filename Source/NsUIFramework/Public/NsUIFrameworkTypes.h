@@ -32,6 +32,10 @@ struct NSUIFRAMEWORK_API FNsUIScreenConfig
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
     TSubclassOf<UNsUISelectionMode> SelectionMode;
+
+    /** True keeps pure game input with no cursor. The confirm and cancel keys still reach the screen. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    bool bGameInputOnly = false;
 };
 
 USTRUCT(BlueprintType)

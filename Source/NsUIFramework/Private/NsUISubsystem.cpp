@@ -389,7 +389,7 @@ void UNsUISubsystem::ApplyInputPolicy()
     if (!Player) { return; }
     bPolicyDirty = false;
     PolicyOwner = Owner;
-    if (!Active)
+    if (!Active || Active->Config.bGameInputOnly)
     {
         Player->SetInputMode(FInputModeGameOnly());
         Player->bShowMouseCursor = false;
@@ -557,6 +557,8 @@ void UNsUISubsystem::RecoverSelection()
     bRecover = false;
     const auto Entry = Active;
     if (!Entry || bSuspended || GetUserIndex() == INDEX_NONE) { return; }
+    // The game view keeps the focus. A focus change flushes the keys that the player holds
+    if (Entry->Config.bGameInputOnly) { return; }
     const FNsUISelectionRequest Request = Entry->bInterface
         ? INsUIScreen::Execute_GetNsScreenSelection(Entry->Widget.Get()) : FNsUISelectionRequest();
     bLogical = Request.Policy == ENsUISelectionPolicy::Logical;
@@ -663,6 +665,8 @@ bool UNsUISubsystem::RouteAction(bool bConfirm)
     if (IsScreenPopup(FSlateApplication::Get().GetUserFocusedWidget(GetUserIndex()))) { return false; }
     if (Entry->bInterface && (bConfirm ? INsUIScreen::Execute_HandleNsScreenConfirm(Entry->Widget.Get())
         : INsUIScreen::Execute_HandleNsScreenCancel(Entry->Widget.Get()))) { return true; }
+    // A key that the screen does not use goes to the game
+    if (Entry->Config.bGameInputOnly) { return false; }
     if (Active != Entry || !Screens.Contains(Entry)) { return true; }
     if (bConfirm ? Entry->Mode->Confirm() : Entry->Mode->Cancel()) { return true; }
     if (!bConfirm && Entry->bOwned)
@@ -692,10 +696,16 @@ bool UNsUISubsystem::ObservePointer(const FVector2D& AbsolutePosition)
     return Active->Mode->ObservePointer(Position);
 }
 
+bool UNsUISubsystem::IsActiveGameInputOnly() const
+{
+    return Active && Active->Config.bGameInputOnly;
+}
+
 bool UNsUISubsystem::RouteNavigate(EUINavigation Direction, bool bGamepad)
 {
     const auto Entry = Active;
     if (!Entry || bSuspended) { return false; }
+    if (Entry->bInterface && INsUIScreen::Execute_HandleNsScreenNavigate(Entry->Widget.Get(), Direction)) { return true; }
     if (bLogical || Entry->Mode->Navigate(Direction)) { return true; }
     return !Entry->Mode->UsesNativeNavigation();
 }
