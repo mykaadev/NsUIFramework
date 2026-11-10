@@ -216,6 +216,7 @@ Tab and Shift+Tab move the focus to the next and the previous control. The stick
 
 ## Limits
 
+- While a text box has the focus, keyboard keys are never UI actions, so Escape and Backspace do not close the widget. A gamepad Confirm and Back still work, and Tab or the arrows leave the text box.
 - The selection cursor follows the focused control only when it has a size on screen.
 - The framework does not detect an Xbox pad from a PlayStation pad. NsInput does that for the prompt icons.
 - With NsInput, the framework tells NsInput the device that the player uses in the UI. It does not read the NsInput device.

@@ -37,7 +37,7 @@ The framework routes UI input the Slate way: a key goes to the focused control f
 
 1. A key goes down. `SNsUIRoot::OnPreviewKeyDown` runs first, because the root is the top of the path. It reports the device and, for Confirm only, calls `HandleConfirm`. It skips this while a text box has the focus (keyboard keys only) or the console is open.
 2. The focused control gets the key. A text box keeps the keys that it types. A button uses Confirm through the Slate navigation config, which maps the UI keys to Accept and Back.
-3. A key that no control used bubbles to `SNsUIRoot::OnKeyDown`. Back goes to `HandleBack`, then to the selection mode, then closes the widget. The tab actions go to `HandleTab`.
+3. A key that no control used bubbles to `SNsUIRoot::OnKeyDown`. While a text box has the focus, the root ignores keyboard keys, because a text box types some keys (such as Backspace) in the character event and leaves their key down unhandled. Back goes to `HandleBack`, then to the selection mode, then closes the widget. The tab actions go to `HandleTab`.
 4. A key that the root does not use bubbles on to the game viewport. With `UIOnly` the player controller ignores input (`FInputModeUIOnly`), but the console still gets its keys. With `UIAndGame` the game gets the key.
 5. A direction becomes a Slate navigation event. `SNsUIWidgetSlot::OnNavigation` calls `HandleNavigate`, then the selection mode. If one uses it, the slot returns a custom reply with no target, so the focus stays. If not, the slot returns Stop, so Slate moves the focus inside the widget only.
 6. `GameFirst`: the game view keeps the focus. An Enhanced Input component on the player controller gives the Confirm and Back actions to the handlers.

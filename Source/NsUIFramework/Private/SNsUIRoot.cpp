@@ -84,6 +84,12 @@ FReply SNsUIRoot::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& KeyEve
         return FReply::Unhandled();
     }
 
+    // A text box types some keys in the character event, so their key down comes here unhandled. A keyboard key in a text box is never a UI action
+    if (!KeyEvent.GetKey().IsGamepadKey() && IsTextFocused(KeyEvent.GetUserIndex()))
+    {
+        return FReply::Unhandled();
+    }
+
     const TOptional<ENsUIAction> Action = OnFindAction.IsBound() ? OnFindAction.Execute(KeyEvent.GetKey()) : TOptional<ENsUIAction>();
     if (Action.IsSet() && !KeyEvent.IsRepeat())
     {
