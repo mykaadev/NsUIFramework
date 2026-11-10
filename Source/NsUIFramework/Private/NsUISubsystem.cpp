@@ -277,7 +277,7 @@ void UNsUISubsystem::FocusChild(UUserWidget* const Widget, UWidget* const Child)
     Entry->LastFocus = Focusable;
     if (Focusable.IsValid() && Entry == Stack->GetActive() && GetUserIndex() != INDEX_NONE)
     {
-        FSlateApplication::Get().SetUserFocus(GetUserIndex(), Focusable, EFocusCause::SetDirectly);
+        FSlateApplication::Get().SetUserFocus(GetUserIndex(), Focusable, EFocusCause::Navigation);
     }
 }
 
@@ -619,7 +619,8 @@ void UNsUISubsystem::ApplyFocus()
         Root->SetTakesFocus(true);
     }
     UE_LOG(LogNsUI, Verbose, TEXT("ApplyFocus gives the focus to %s"), Target.IsValid() ? *Target->GetTypeAsString() : TEXT("the root"));
-    Slate.SetUserFocus(UserIndex, Target.IsValid() ? Target : StaticCastSharedPtr<SWidget>(Root), EFocusCause::SetDirectly);
+    // Slate draws the focus look only for a focus from navigation, so the first focus of a widget uses that cause
+    Slate.SetUserFocus(UserIndex, Target.IsValid() ? Target : StaticCastSharedPtr<SWidget>(Root), EFocusCause::Navigation);
 }
 
 bool UNsUISubsystem::RetryFocus()
