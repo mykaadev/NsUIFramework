@@ -1,125 +1,180 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "InputCoreTypes.h"
+#include "NsUIFrameworkTypes.h"
 #include "Types/SlateEnums.h"
 #include "UObject/Object.h"
 #include "NsUISelectionMode.generated.h"
 
-class UUserWidget;
-class UWidget;
-class APlayerController;
-class AActor;
-class SWidget;
+/** Called when the selection of a world selection mode changes */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNsUISelectionChanged, class UNsUISelectionMode*, SelectionMode);
 
-/** Selection state owned by one screen, including while suspended. */
-UCLASS(Abstract, NotBlueprintable)
+/**
+ * Selects something other than the controls of a widget, such as world points or actors. One object for each open widget
+ * While a selection mode is active, the widget root has the focus, and the mode gets the directions, the pointer, Confirm, and Back
+ */
+UCLASS(Abstract)
 class NSUIFRAMEWORK_API UNsUISelectionMode : public UObject
 {
     GENERATED_BODY()
 
+// Functions
 public:
-    virtual void Initialize(UUserWidget* InScreen);
-    virtual void Refresh() {}
-    virtual bool Restore(UWidget* Preferred) PURE_VIRTUAL(UNsUISelectionMode::Restore, return false;);
-    virtual bool HasSelection() const PURE_VIRTUAL(UNsUISelectionMode::HasSelection, return false;);
+    /** Sets the widget of the mode. The framework calls it when the widget opens */
+    virtual void Initialize(class UUserWidget* InWidget);
+
+    /** The widget got input. The default does nothing */
+    virtual void Activate() {}
+
+    /** Moves the selection in a direction. Returns true when the mode used the direction */
     virtual bool Navigate(EUINavigation Direction) { return false; }
-    virtual bool UsesNativeNavigation() const { return false; }
-    virtual bool ObservePointer(const FVector2D& Position) { return false; }
+
+    /** Selects the candidate at a viewport position. Returns true when a candidate is there */
+    virtual bool PickAt(const FVector2D& ViewportPosition) { return false; }
+
+    /** Uses Confirm. Returns true when the mode used it */
     virtual bool Confirm() { return false; }
+
+    /** Uses Back. Returns true when the mode used it */
     virtual bool Cancel() { return false; }
-    virtual UWidget* GetFocusTarget() const { return nullptr; }
-    virtual bool ObserveFocus(const TSharedPtr<SWidget>& Widget) { return false; }
-    virtual bool GetCursorPosition(FVector2D& Position) const PURE_VIRTUAL(UNsUISelectionMode::GetCursorPosition, return false;);
+
+    /** Gives the viewport position of the selection. Returns false when nothing is selected or the selection is not on screen */
+    virtual bool GetSelectionPosition(FVector2D& OutViewportPosition) const { return false; }
+
+    /** Returns the selection as text, for debug */
     virtual FString DescribeSelection() const { return FString(); }
 
+    /** Returns the widget of the mode */
+    UFUNCTION(BlueprintPure, Category = "NsUI")
+    class UUserWidget* GetWidget() const { return Widget.Get(); }
+
 protected:
-    APlayerController* GetPlayerController() const;
+    /** Returns the player controller of the widget, or null */
+    class APlayerController* GetPlayerController() const;
 
-    UPROPERTY(Transient)
-    TWeakObjectPtr<UUserWidget> Screen;
-};
-
-/** Discovers controls inside the screen and nested widget trees. */
-UCLASS()
-class NSUIFRAMEWORK_API UNsUIUMGSelectionMode : public UNsUISelectionMode
-{
-    GENERATED_BODY()
-
+// Variables
 public:
-    virtual bool UsesNativeNavigation() const override { return true; }
-    virtual void Refresh() override;
-    virtual bool Restore(UWidget* Preferred) override;
-    virtual bool HasSelection() const override;
-    virtual UWidget* GetFocusTarget() const override;
-    virtual bool ObserveFocus(const TSharedPtr<SWidget>& Widget) override;
-    virtual bool GetCursorPosition(FVector2D& Position) const override;
-    virtual FString DescribeSelection() const override;
+    /** Called when the selection changes */
+    UPROPERTY(BlueprintAssignable, Category = "NsUI")
+    FNsUISelectionChanged OnSelectionChanged;
 
-private:
-    TArray<TWeakObjectPtr<UWidget>> Candidates;
-    TWeakObjectPtr<UWidget> Selected;
-    TWeakPtr<SWidget> NativePopupFocus;
+protected:
+    /** The widget of the mode */
+    UPROPERTY(Transient)
+    TWeakObjectPtr<class UUserWidget> Widget;
 };
 
-/** Shared directional selection for explicit world candidates. */
+/** The base of the modes that select world positions. A direction moves to the nearest candidate in that direction on screen */
 UCLASS(Abstract)
 class NSUIFRAMEWORK_API UNsUIWorldSelectionMode : public UNsUISelectionMode
 {
     GENERATED_BODY()
 
+// Functions
 public:
-    virtual bool Restore(UWidget* Preferred) override;
-    virtual bool HasSelection() const override;
+    /** Constructor */
+    UNsUIWorldSelectionMode();
+
+    //~ Begin UNsUISelectionMode Interface
+    virtual void Activate() override;
     virtual bool Navigate(EUINavigation Direction) override;
-    virtual bool ObservePointer(const FVector2D& Position) override;
-    virtual bool GetCursorPosition(FVector2D& Position) const override;
+    virtual bool PickAt(const FVector2D& ViewportPosition) override;
+    virtual bool GetSelectionPosition(FVector2D& OutViewportPosition) const override;
+    //~ End UNsUISelectionMode Interface
+
+    /** Selects a candidate by its index. INDEX_NONE clears the selection */
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    void SelectIndex(int32 Index);
+
+    /** Returns the index of the selected candidate, or INDEX_NONE */
+    UFUNCTION(BlueprintPure, Category = "NsUI")
+    int32 GetSelectedIndex() const { return SelectedIndex; }
 
 protected:
+    /** Returns the number of candidates */
     virtual int32 GetCandidateCount() const PURE_VIRTUAL(UNsUIWorldSelectionMode::GetCandidateCount, return 0;);
-    virtual bool GetCandidatePosition(int32 Index, FVector& Position) const PURE_VIRTUAL(UNsUIWorldSelectionMode::GetCandidatePosition, return false;);
-    bool Project(int32 Index, FVector2D& Position) const;
-    int32 SelectedIndex = INDEX_NONE;
+
+    /** Gives the world position of a candidate. Returns false when the candidate has no position now */
+    virtual bool GetCandidatePosition(int32 Index, FVector& OutPosition) const PURE_VIRTUAL(UNsUIWorldSelectionMode::GetCandidatePosition, return false;);
+
+    /** Gives the viewport position of a candidate. Returns false when it is not on screen */
+    bool ProjectCandidate(int32 Index, FVector2D& OutViewportPosition) const;
+
+    /** Clears a selection that is past the end of the candidates */
+    void ClampSelection();
+
+// Variables
+public:
+    /** True selects the candidate nearest to the screen center when the widget gets input with no selection. False keeps no selection until the player moves */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NsUI")
+    bool bSelectOnActivate;
+
+protected:
+    /** The index of the selected candidate, or INDEX_NONE */
+    int32 SelectedIndex;
 };
 
+/** Selects one actor of a list */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUIActorSelectionMode : public UNsUIWorldSelectionMode
 {
     GENERATED_BODY()
 
+// Functions
 public:
-    void SetCandidates(const TArray<TWeakObjectPtr<AActor>>& InCandidates);
-    AActor* GetSelectedActor() const;
+    //~ Begin UNsUISelectionMode Interface
     virtual FString DescribeSelection() const override;
+    //~ End UNsUISelectionMode Interface
+
+    /** Sets the actors to select from. The selection resets */
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    void SetCandidates(const TArray<class AActor*>& InCandidates);
+
+    /** Returns the selected actor, or null */
+    UFUNCTION(BlueprintPure, Category = "NsUI")
+    class AActor* GetSelectedActor() const;
 
 protected:
-    virtual int32 GetCandidateCount() const override;
-    virtual bool GetCandidatePosition(int32 Index, FVector& Position) const override;
+    //~ Begin UNsUIWorldSelectionMode Interface
+    virtual int32 GetCandidateCount() const override { return Candidates.Num(); }
+    virtual bool GetCandidatePosition(int32 Index, FVector& OutPosition) const override;
+    //~ End UNsUIWorldSelectionMode Interface
 
+// Variables
 private:
-    TArray<TWeakObjectPtr<AActor>> Candidates;
+    /** The actors to select from. The mode does not keep them alive */
+    TArray<TWeakObjectPtr<class AActor>> Candidates;
 };
 
-struct NSUIFRAMEWORK_API FNsUILocation
-{
-    FName Id;
-    FVector Position = FVector::ZeroVector;
-};
-
+/** Selects one world point of a list */
 UCLASS()
 class NSUIFRAMEWORK_API UNsUILocationSelectionMode : public UNsUIWorldSelectionMode
 {
     GENERATED_BODY()
 
+// Functions
 public:
-    void SetCandidates(const TArray<FNsUILocation>& InCandidates);
-    FName GetSelectedId() const;
+    //~ Begin UNsUISelectionMode Interface
     virtual FString DescribeSelection() const override;
+    //~ End UNsUISelectionMode Interface
+
+    /** Sets the points to select from. A point with no id or a repeated id is left out. The selection resets */
+    UFUNCTION(BlueprintCallable, Category = "NsUI")
+    void SetCandidates(const TArray<FNsUILocation>& InCandidates);
+
+    /** Returns the id of the selected point, or None */
+    UFUNCTION(BlueprintPure, Category = "NsUI")
+    FName GetSelectedId() const;
 
 protected:
-    virtual int32 GetCandidateCount() const override;
-    virtual bool GetCandidatePosition(int32 Index, FVector& Position) const override;
+    //~ Begin UNsUIWorldSelectionMode Interface
+    virtual int32 GetCandidateCount() const override { return Candidates.Num(); }
+    virtual bool GetCandidatePosition(int32 Index, FVector& OutPosition) const override;
+    //~ End UNsUIWorldSelectionMode Interface
 
+// Variables
 private:
+    /** The points to select from */
+    UPROPERTY(Transient)
     TArray<FNsUILocation> Candidates;
 };

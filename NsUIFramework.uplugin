@@ -1,27 +1,26 @@
 ﻿{
-	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "1.0",
-	"FriendlyName": "NsUIFramework",
-	"Description": "Nulled Softworks - UI Framework",
-	"Category": "Other",
-	"CreatedBy": "nulled.softworks",
-	"CreatedByURL": "mykaadev.github.io",
-	"DocsURL": "",
-	"CanContainContent": true,
-	"IsBetaVersion": false,
-	"IsExperimentalVersion": false,
-	"Installed": false,
-	"Modules": [
-		{
-			"Name": "NsUIFramework",
-			"Type": "Runtime",
-			"LoadingPhase": "Default"
-		},
-		{
-			"Name": "NsUIFrameworkEditor",
-			"Type": "Editor",
-			"LoadingPhase": "Default"
-		}
-	]
+    "FileVersion": 3,
+    "Version": 2,
+    "VersionName": "2.0",
+    "FriendlyName": "NsUIFramework",
+    "Description": "Nulled Softworks - UI widgets, focus, and UI input for each local player",
+    "Category": "User Interface",
+    "CreatedBy": "nulled.softworks",
+    "CreatedByURL": "https://mykaadev.github.io",
+    "DocsURL": "",
+    "CanContainContent": true,
+    "IsBetaVersion": false,
+    "IsExperimentalVersion": false,
+    "Installed": false,
+    "Plugins": [
+        { "Name": "EnhancedInput", "Enabled": true },
+        { "Name": "NsTween", "Enabled": true, "Optional": true },
+        { "Name": "NsInput", "Enabled": true, "Optional": true }
+    ],
+    "Modules": [
+        { "Name": "NsUIFramework", "Type": "Runtime", "LoadingPhase": "Default" },
+        { "Name": "NsUIFrameworkTween", "Type": "Runtime", "LoadingPhase": "Default" },
+        { "Name": "NsUIFrameworkInput", "Type": "Runtime", "LoadingPhase": "Default" },
+        { "Name": "NsUIFrameworkEditor", "Type": "Editor", "LoadingPhase": "Default" }
+    ]
 }

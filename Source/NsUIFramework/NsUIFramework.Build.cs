@@ -4,26 +4,10 @@ public class NsUIFramework : ModuleRules
 {
     public NsUIFramework(ReadOnlyTargetRules Target) : base(Target)
     {
-        PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        PublicDependencyModuleNames.AddRange(
-            new string[]
-            {
-                "Core",
-                "UMG",
-                "DeveloperSettings"
-            }
-        );
-
-        PrivateDependencyModuleNames.AddRange(
-            new string[]
-            {
-                "CoreUObject",
-                "Engine",
-                "Slate",
-                "SlateCore",
-                "InputCore"
-            }
-        );
+        // Public headers use UObjects, actors, local player subsystems, UMG widgets, Slate enums, keys, and developer settings
+        PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "SlateCore", "UMG", "DeveloperSettings", "EnhancedInput" });
+        PrivateDependencyModuleNames.AddRange(new[] { "Slate" });
     }
 }

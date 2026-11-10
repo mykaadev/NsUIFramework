@@ -1,51 +1,51 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "NsUIFrameworkTypes.h"
 #include "Templates/SubclassOf.h"
 #include "NsUIHUD.generated.h"
 
-class UUserWidget;
-
-/** One screen that a HUD opens when it starts */
+/** One widget that the HUD opens when play starts */
 USTRUCT(BlueprintType)
-struct NSUIFRAMEWORK_API FNsUIStartScreen
+struct NSUIFRAMEWORK_API FNsUIStartWidget
 {
     GENERATED_BODY()
 
-    /** Widget class of the screen */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
-    TSubclassOf<UUserWidget> Screen;
+    /** The widget class to open */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NsUI")
+    TSubclassOf<class UUserWidget> Widget;
 
-    /** Layer of the screen. Game keeps gameplay input, Menu shows the cursor */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NsUI")
+    /** The layer of the widget */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NsUI")
     ENsUILayer Layer = ENsUILayer::Game;
 };
 
-/**
- * HUD that opens its start screens for the local player. The game mode Blueprint picks the HUD class,
- * and the HUD Blueprint picks the screens, for example a title menu or the gameplay HUD
- */
+/** A HUD that opens a list of widgets when play starts, and closes them when play ends */
 UCLASS(Blueprintable)
 class NSUIFRAMEWORK_API ANsUIHUD : public AHUD
 {
     GENERATED_BODY()
 
+// Functions
 public:
     //~ Begin AActor Interface
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     //~ End AActor Interface
 
-    /** Return the open start screen of a class, or null */
-    UFUNCTION(BlueprintPure, Category="NsUI", meta=(DeterminesOutputType="ScreenClass"))
-    UUserWidget* GetStartScreen(TSubclassOf<UUserWidget> ScreenClass) const;
+    /** Returns the open start widget of a class, or null */
+    UFUNCTION(BlueprintPure, Category = "NsUI", meta = (DeterminesOutputType = "WidgetClass"))
+    class UUserWidget* GetStartWidget(TSubclassOf<class UUserWidget> WidgetClass) const;
 
-    /** Screens that open when the HUD starts, in this order */
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="NsUI")
-    TArray<FNsUIStartScreen> StartScreens;
+// Variables
+public:
+    /** The widgets to open on BeginPlay, in order */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NsUI")
+    TArray<FNsUIStartWidget> StartWidgets;
 
 private:
-    /** Start screens that are open */
+    /** The widgets that this HUD opened. The HUD closes the ones that are still open in EndPlay */
     UPROPERTY(Transient)
-    TArray<TObjectPtr<UUserWidget>> OpenScreens;
+    TArray<TWeakObjectPtr<class UUserWidget>> OpenedWidgets;
 };

@@ -5,38 +5,29 @@
 #include "GameFramework/PlayerController.h"
 #include "NsUISubsystem.h"
 
-UNsUISubsystem* UNsUIFunctionLibrary::GetUISubsystem(const APlayerController* Player)
+UNsUISubsystem* UNsUIFunctionLibrary::GetUISubsystem(const APlayerController* const Player)
 {
-    const ULocalPlayer* LocalPlayer = Player ? Player->GetLocalPlayer() : nullptr;
-    return LocalPlayer ? LocalPlayer->GetSubsystem<UNsUISubsystem>() : nullptr;
+    const ULocalPlayer* const LocalPlayer = Player != nullptr ? Player->GetLocalPlayer() : nullptr;
+    return LocalPlayer != nullptr ? LocalPlayer->GetSubsystem<UNsUISubsystem>() : nullptr;
 }
 
-UUserWidget* UNsUIFunctionLibrary::OpenScreen(APlayerController* Player, TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer, UObject* Context)
+UUserWidget* UNsUIFunctionLibrary::OpenWidget(const APlayerController* const Player, const TSubclassOf<UUserWidget> WidgetClass, UObject* const Context, const ENsUILayer Layer)
 {
-    UNsUISubsystem* Host = GetUISubsystem(Player);
-    return Host ? Host->OpenScreen(ScreenClass, Context, Layer) : nullptr;
+    UNsUISubsystem* const UI = GetUISubsystem(Player);
+    return UI != nullptr ? UI->OpenWidget(WidgetClass, Context, Layer) : nullptr;
 }
 
-UUserWidget* UNsUIFunctionLibrary::ToggleScreen(APlayerController* Player, TSubclassOf<UUserWidget> ScreenClass, ENsUILayer Layer)
+UUserWidget* UNsUIFunctionLibrary::ToggleWidget(const APlayerController* const Player, const TSubclassOf<UUserWidget> WidgetClass, UObject* const Context, const ENsUILayer Layer)
 {
-    UNsUISubsystem* Host = GetUISubsystem(Player);
-    if (!Host)
-    {
-        return nullptr;
-    }
-    if (UUserWidget* Open = Host->FindScreen(ScreenClass))
-    {
-        Host->CloseScreen(Open);
-        return nullptr;
-    }
-    return Host->OpenScreen(ScreenClass, nullptr, Layer);
+    UNsUISubsystem* const UI = GetUISubsystem(Player);
+    return UI != nullptr ? UI->ToggleWidget(WidgetClass, Context, Layer) : nullptr;
 }
 
-void UNsUIFunctionLibrary::CloseScreen(UUserWidget* Screen)
+void UNsUIFunctionLibrary::CloseWidget(UUserWidget* const Widget)
 {
-    const ULocalPlayer* LocalPlayer = Screen ? Screen->GetOwningLocalPlayer() : nullptr;
-    if (UNsUISubsystem* Host = LocalPlayer ? LocalPlayer->GetSubsystem<UNsUISubsystem>() : nullptr)
+    UNsUISubsystem* const UI = Widget != nullptr ? GetUISubsystem(Widget->GetOwningPlayer()) : nullptr;
+    if (UI != nullptr)
     {
-        Host->CloseScreen(Screen);
+        UI->CloseWidget(Widget);
     }
 }
