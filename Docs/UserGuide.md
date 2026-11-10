@@ -2,32 +2,30 @@
 
 ## Purpose
 
-NsUIFramework controls UI interaction for each local player. It opens and closes screens on three layers, decides which screen gets input, moves the selection with keyboard, mouse, and gamepad, and routes Confirm and Back. It also sets the input mode and the mouse cursor each time the active screen changes. A HUD class opens start screens, and a second subsystem shows floating texts over world points, for example "+3 coins".
+NsUIFramework opens and closes the UI widgets of each local player. It decides which widget gets input, gives the focus to a control, and routes Confirm, Back, the directions, and the tabs. It sets the input mode and the mouse cursor each time another widget gets input. It can also select world points or actors, and show floating texts over world points, for example "+3 coins".
 
-NsUIFramework does not style widgets, animate screens, detect the input device, or show input prompt icons. It does not replicate: each machine shows its own UI.
-
-[![Screens on the Game, Menu, and Modal layers, with the active screen and its input mode](Showcase/img/screenstack.png)](Showcase/ScreenStack.html)
+NsUIFramework does not style widgets and does not animate them. Use NsUIStyle for the look and NsTween for motion. It does not replicate: each machine shows its own UI.
 
 ## Setup
 
-1. Copy the `NsUIFramework` folder into the `Plugins` folder of your project.
-2. Open the project and enable NsUIFramework in Edit > Plugins.
+1. Put the `NsUIFramework` folder in a plugin folder of the project.
+2. Enable NsUIFramework in Edit > Plugins. It also enables Enhanced Input.
 3. For C++, add `"NsUIFramework"` to the module dependencies in `Build.cs`.
-4. Generate the project files and build the project.
-5. Optional: open Project Settings > Game > NsUI Framework, and change the keys.
+4. Open Project Settings > Plugins > Ns UI Framework.
+5. Set **Input Mapping Context** to `IMC_NsUI` and set each entry of **Input Actions** to its `IA_NsUI_` action. The plugin content folder `NsUIFramework/Input` has them.
+6. Optional: set **Cursor Widget Class** to a Blueprint child of `NsUICursorWidget`.
 
-No other project settings are necessary.
+Without step 5 the log shows an `Error`, and the UI has no keys.
 
 ## Quick Start
 
 ### Blueprint
 
-1. Make a Widget Blueprint with `NsUIWidget` as the parent. Add a button to it.
-2. In the Level Blueprint, from `Event BeginPlay`, call `Open Screen`.
-3. Connect `Get Player Controller` to **Player**.
-4. Set **Screen Class** to your widget and **Layer** to `Menu`.
-5. Click Play. The screen shows, the mouse cursor shows, and gameplay input stops.
-6. Push a Cancel key (Escape or the gamepad Back button). The screen closes, and gameplay input comes back.
+1. Make a Widget Blueprint with `NsUIWidget` as the parent. Add a button.
+2. In the player controller, call `Open Widget` from the NsUI function library.
+3. Set **Widget Class** to the new widget and **Layer** to `Menu`.
+4. Click Play. The widget shows, the button has the focus, and game input stops.
+5. Push Escape or the gamepad Back button. The widget closes, and game input comes back.
 
 ### C++
 
@@ -35,228 +33,219 @@ No other project settings are necessary.
 #include "NsUISubsystem.h"
 
 UNsUISubsystem* const UI = LocalPlayer->GetSubsystem<UNsUISubsystem>();
-UUserWidget* const Screen = UI->OpenScreen(PauseMenuClass, Context, ENsUILayer::Menu);
-UI->CloseScreen(Screen);
+UUserWidget* const Pause = UI->OpenWidget(PauseClass, nullptr, ENsUILayer::Menu);
+UI->CloseWidget(Pause);
 UI->CloseAll(ENsUILayer::Modal);
 ```
 
-The subsystem owns the screens that `OpenScreen` makes. It keeps the context object alive until the screen closes.
-
 ## Common Tasks
 
-### Make a screen from any widget
+### Make a widget work with the framework
 
-1. Open a Widget Blueprint that has another parent class.
-2. Open Class Settings.
-3. Add the interface `NsUIScreen` to **Implemented Interfaces**.
+Use `NsUIWidget` as the parent. A widget with another parent can implement the interface `NsUIWidgetInterface` in Class Settings. Every event of the interface is optional.
 
-All screen events are optional. A widget with no interface can also open through `Open Screen`, with the default config.
-
-### Respond to screen events
-
-1. In the screen Blueprint, implement the event of the table below. In C++, override its `_Implementation` function.
-2. For `Handle Ns Screen Confirm` and `Handle Ns Screen Cancel`, return true when the screen uses the action.
+### Respond to events
 
 | Event | Use |
 |---|---|
-| `Get Ns Screen Config` | Return the layer, **Interactive**, the gameplay policy, and the selection mode class. |
-| `On Ns Screen Opened` | Get the context and the selection mode object of this screen. |
-| `On Ns Screen Activated` | The screen gets input. **Resumed** is true when the screen had input before. |
-| `On Ns Screen Suspended` | The screen loses input but stays open. |
-| `On Ns Screen Closed` | The screen closes. Release resources. |
-| `Get Ns Screen Selection` | Return automatic selection, a preferred target, or logical input. |
-| `Handle Ns Screen Confirm` | Return true to use Confirm before the selected control gets it. |
-| `Handle Ns Screen Cancel` | Return true to use Back before the default close. |
+| `Get Config` | Return the input policy, the focus policy, the selection mode class, and `Show Mouse Cursor`. |
+| `Get Focus` | Return the **Preferred Target**: the control that gets the focus when the widget has no earlier focus. |
+| `On Opened` | Get the context object and the selection mode. |
+| `On Activated` | The widget gets input. **Resumed** is true when it had input before. |
+| `On Deactivated` | A higher widget took the input. The widget stays open. |
+| `On Closed` | The widget closed. Release resources. |
+| `On Focus Changed` | The focus moved to another control. Use it for the focus look and the focus sound. |
+| `Handle Confirm` | Return true to use Confirm before the focused control gets it. |
+| `Handle Back` | Return true to use Back. Without it, Back closes the widget. |
+| `Handle Navigate` | Return true to use a direction before the focus moves, for example to pan a map. |
+| `Handle Tab` | Return true to use the next or previous tab action. |
+| `Begin Close` | Return true to play an outro. Then call `Finish Close Widget`. |
 
 ### Choose the layer
 
-| Layer | Use | Gameplay input with `Automatic` |
-|---|---|---|
-| `Game` | HUD parts that take input during play. | Allowed |
-| `Menu` | Menus such as pause or settings. | Blocked |
-| `Modal` | Popups such as confirmations. | Blocked |
+| Layer | Use |
+|---|---|
+| `Game` | HUD parts and widgets of play. |
+| `Menu` | Menus such as pause or settings. |
+| `Modal` | Popups such as confirmations. |
 
-Only the highest interactive screen gets input: Modal, then Menu, then Game. In one layer, the last screen to open has priority. Other interactive screens stay visible but take no clicks.
+Only one widget gets input: the highest layer first, and in one layer the newest widget.
 
-For `Open Screen`, the **Layer** pin sets the layer. The layer of `Get Ns Screen Config` applies only to a screen that you add with `Add to Viewport`.
+### Choose the input policy
 
-### Open screens when play starts
+| Policy | Input |
+|---|---|
+| `Passive` | No input. Use it for prompts, toasts, and HUD parts. |
+| `UI Only` | The default. The UI takes all input. |
+| `UI And Game` | The UI takes the UI actions. All other keys and the sticks go to the game. |
+| `Game First` | The game keeps the focus. `Handle Confirm` and `Handle Back` also get their keys, for example for a dialogue line. |
 
-1. Make a Blueprint with `NsUIHUD` as the parent.
-2. In **Start Screens**, add an entry for each screen.
-3. Set **Screen** to the widget class and **Layer** to the layer. The default layer is `Game`.
-4. In your game mode, set **HUD Class** to the new HUD.
+A widget that changes its policy while it is open calls `Refresh Config`.
 
-The HUD opens the screens in list order on `BeginPlay`, for a local player controller only. Use `Get Start Screen` to get one of them.
+### Use a widget that another system shows
 
-### Toggle a screen, for example a pause menu
+Some systems make and show their own widget, for example a dialogue plugin that uses `Add to Viewport`.
 
-1. Bind an input action in your player controller.
-2. Call `Toggle Screen` with the player controller, the widget class, and the layer.
+1. Give the widget the input policy `Game First` or `Passive` in `Get Config`.
+2. When the widget shows, call `Add External Widget` with the widget and the layer. `Native Construct` is a good place.
+3. Before the widget goes away, call `Remove External Widget`. `Native Destruct` is a good place.
 
-`Toggle Screen` closes the newest open screen of that class, or opens a new one.
+The framework does not move the widget and does not touch its Slate. It only routes Confirm and Back to its handlers. `Close Widget` does not close it: the system that shows it removes it.
 
-### Close a screen from inside it
+### Toggle a widget, for example a pause menu
 
-1. In the screen, call `Close Screen` with **Self**.
+Call `Toggle Widget` with the class. It closes the newest open widget of the class, or opens a new one.
 
-Back also closes a screen that the subsystem opened, when no handler and no selection mode use the action.
+### Know if a widget is open
 
-### Let gameplay continue under a screen
+Call `Is Widget Open`, `Find Widget`, or `Get Active Widget`. Do not test the parent of the widget.
 
-1. In `Get Ns Screen Config`, set **Gameplay** to `Allow`, for example for dialogue.
+### Put the focus on a control after a rebuild
 
-With `Allow`, the input mode is game and UI. With the UMG selection mode, the analog sticks go to gameplay, and the digital directions still move the UI selection.
+Call `Focus Child` with the widget and the control. Call `Restore Focus` to go back to the last focused control.
 
-### Show a passive screen
+### Take all input in the widget itself
 
-1. In `Get Ns Screen Config`, set **Interactive** to false.
-
-Use it for prompts, toasts, and other screens that take no input.
-
-### Set the first focus
-
-1. In `Get Ns Screen Selection`, set **Preferred Target** to a widget of the screen.
-
-A preferred target does not replace a valid selection that the player made.
-
-### Take all input in the screen
-
-1. In `Get Ns Screen Selection`, set **Policy** to `Logical`.
-
-With `Logical`, no control takes focus and no UI cursor shows. The navigation keys do nothing. Confirm and Back go to `Handle Ns Screen Confirm` and `Handle Ns Screen Cancel`.
+In `Get Config`, set **Focus Policy** to `Self`. No control takes the focus, and the handlers get Confirm, Back, the directions, and the tabs.
 
 ### Select actors or world points
 
-This task needs C++, because `SetCandidates` is not a Blueprint function.
+1. In `Get Config`, set **Selection Mode Class** to `NsUIActorSelectionMode` or `NsUILocationSelectionMode`.
+2. In `On Opened`, cast the selection mode and call `Set Candidates`.
+3. In `Handle Confirm`, read `Get Selected Actor` or `Get Selected Id`.
 
-1. In `GetNsScreenConfig`, set `SelectionMode` to `UNsUIActorSelectionMode` or `UNsUILocationSelectionMode`.
-2. In `OnNsScreenOpened`, cast the selection mode to that class.
-3. Call `SetCandidates` with weak actor pointers, or with `FNsUILocation` entries (an id and a position).
-4. In `HandleNsScreenConfirm`, read `GetSelectedActor` or `GetSelectedId`.
-
-The arrows move to the nearest candidate in that direction. The mouse selects a candidate within 24 pixels, and a left click on a candidate also confirms. Only candidates on screen can be selected. Location ids must be unique and not empty. The mode drops other entries. Candidate order breaks ties.
-
-### Use a widget made with Add to Viewport
-
-1. Implement `NsUIScreen` on the widget.
-2. Add it to the viewport for the same local player.
-3. Remove it from the viewport when you are done.
-
-The subsystem finds the widget and gives it input by its config. `Close Screen`, `Close All`, and Back do not remove it.
+The directions move to the nearest candidate inside a cone of that direction. The mouse selects a candidate near the pointer, and a left click confirms it. Set **Select On Activate** to false to start with no selection. Bind `On Selection Changed` to react to a new selection.
 
 ### Show a floating text in the world
 
 1. Make a Widget Blueprint with `NsUIWorldPopupWidget` as the parent.
-2. Add a Text Block named `PopupText`.
-3. In the class defaults, set the motion values. The World popup widget table under Settings lists them.
-4. Get the `NsUIWorldPopupSubsystem` of the local player.
-5. Call `Show Popup` with the class, the text, a location, and a color.
+2. Add a Text Block named `PopupText`. Optional: add animations named `Appear` and `Disappear`.
+3. In the class defaults, set the motion values (see Settings).
+4. Call `Show Popup` on the `NsUIWorldPopupSubsystem` of the local player.
 
 ```cpp
 UNsUIWorldPopupSubsystem* const Popups = LocalPlayer->GetSubsystem<UNsUIWorldPopupSubsystem>();
 Popups->ShowPopup(PopupClass, FText::FromString(TEXT("+3 coins")), FVector(0.f, 0.f, 100.f), FLinearColor::Yellow, TargetActor);
 ```
 
-With a follow actor, the location is an offset from that actor. Without one, the location is a world point. The popup shows only for the player who calls it. A game that wants every player to see an event calls `Show Popup` on every machine, for example from a replicated event. Implement `On Popup Started` in the widget to react to a new popup, for example to show an icon.
+### Open widgets when play starts
+
+Make a Blueprint child of `NsUIHUD`, fill **Start Widgets**, and set it as the HUD class of the game mode. The HUD closes these widgets when play ends.
+
+## Rules
+
+- Open every widget that takes input with `Open Widget`. Do not use `Add to Viewport` for it. A widget that another system shows uses `Add External Widget`.
+- Do not call `Set Input Mode` or change the mouse cursor. The framework owns them.
+- Do not bind Confirm or Back in a widget. Use `Handle Confirm` and `Handle Back`.
+- Set the first focus in `Get Focus`, never in a delay or a timer.
+- Keep **Consume Input** off on the UI input actions. Otherwise the game loses those keys. The log shows an `Error` when an action consumes input.
 
 ## Settings
 
-### Project settings
-
-Project Settings > Game > NsUI Framework:
+### Project settings (Plugins > Ns UI Framework)
 
 | Setting | Default | Effect |
 |---|---|---|
-| **Confirm Keys** | Enter, Space Bar, gamepad Accept | Keys for Confirm |
-| **Cancel Keys** | Escape, gamepad Back | Keys for Back |
-| **Navigate Up Keys** | Up, D-pad Up | Keys that move the selection up |
-| **Navigate Down Keys** | Down, D-pad Down | Keys that move the selection down |
-| **Navigate Left Keys** | Left, D-pad Left | Keys that move the selection left |
-| **Navigate Right Keys** | Right, D-pad Right | Keys that move the selection right |
-| **Navigate Next Keys** | Tab | Keys that move to the next control |
-| **Navigate Previous Keys** | None | Keys that move to the previous control. Shift+Tab always moves back |
-| **Cursor Velocity** | 20 | The speed of the UI cursor toward the selection. A higher value is faster |
-| **Cursor Lerp Curve** | Cubic from (0, 0) to (1, 1) | The curve on the cursor motion |
+| **Input Mapping Context** | None | The mapping context of the UI keys. The framework adds it to each player. |
+| **Input Mapping Priority** | 0 | The priority of the UI mapping context. |
+| **Input Actions** | None | The Enhanced Input action of each UI action. |
+| **Cursor Widget Class** | None | The selection cursor. None shows no selection cursor. |
+| **Root Z Order** | 10 | The viewport order of the UI root. |
+| **Cursor Z Order** | 1000 | The viewport order of the selection cursor. |
+| **Pointer Pick Radius** | 24 | The distance in which the mouse selects a world candidate. |
+| **World Navigation Cone Degrees** | 60 | The widest angle from a direction for the next world candidate. |
 
-### Screen config (`Get Ns Screen Config`)
+### Widget config (`Get Config`)
 
 | Setting | Default | Effect |
 |---|---|---|
-| **Layer** | `Menu` | The layer of a screen added with `Add to Viewport` |
-| **Interactive** | true | False makes a passive screen that never gets input |
-| **Gameplay** | `Automatic` | `Automatic` allows gameplay input on `Game` only. `Allow` and `Block` force it |
-| **Selection Mode** | None | None uses `NsUIUMGSelectionMode` |
+| **Input Policy** | `UI Only` | How the widget shares input with the game. |
+| **Focus Policy** | `Children` | `Self` keeps the focus on the widget itself. |
+| **Selection Mode Class** | None | A world selection mode. None selects controls. |
+| **Show Mouse Cursor** | true | Shows the mouse cursor while the player uses the mouse. |
 
-### Selection request (`Get Ns Screen Selection`)
+### Default keys (`IMC_NsUI`)
+
+| Action | Keys |
+|---|---|
+| Confirm | Enter, Space Bar, gamepad bottom face button |
+| Back | Escape, gamepad right face button |
+| Up, Down, Left, Right | The arrow keys and the D-pad |
+| Next Tab, Previous Tab | Gamepad right and left shoulder |
+
+Tab and Shift+Tab move the focus to the next and the previous control. The sticks move the focus in `UI Only`.
+
+### Selection cursor (`NsUICursorWidget`)
 
 | Setting | Default | Effect |
 |---|---|---|
-| **Policy** | `Automatic` | `Logical` takes all input in the screen handlers |
-| **Preferred Target** | None | The widget to select when nothing is selected |
-
-### HUD (`NsUIHUD`)
-
-| Setting | Default | Effect |
-|---|---|---|
-| **Start Screens** | Empty | The screens to open on `BeginPlay`, in order. Each entry has a **Screen** class and a **Layer** (default `Game`) |
+| **Anchor In Target** | (0, 0) | The point of the selected control that the cursor points at. |
+| **Cursor Alignment** | (0, 0) | The point of the cursor that sits on the anchor. |
+| **Glide Seconds** (`NsUITweenCursorWidget`) | 0.12 s | The time of one glide. Needs NsTween. |
 
 ### World popup widget
 
-Class defaults of a `NsUIWorldPopupWidget` child:
-
 | Setting | Default | Effect |
 |---|---|---|
-| **Lifetime** | 1.2 s | The time that the popup shows |
-| **Rise Speed** | 45 cm/s | The upward speed in the world |
-| **Max Distance** | 3000 cm | The popup hides beyond this distance from the camera |
-| **Fade In Seconds** | 0.1 s | The fade in at the start |
-| **Fade Out Seconds** | 0.4 s | The fade out at the end |
-| **Pop Scale** | 1 | The scale at the start. The popup shrinks to scale 1 |
-| **Pop Seconds** | 0.2 s | The time from the pop scale to scale 1 |
-| **Hide When Blocked** | true | Hides the popup while a Visibility trace from the camera hits something |
-| **Max Active** | 4 | The most popups of this class for one player. A new popup over the limit ends the oldest one |
-| **Stack Height** | 30 cm | The extra height for each popup that follows the same actor |
-| **Viewport Z Order** | -100 | The viewport order. A lower value draws under other viewport widgets |
+| **Lifetime** | 1.2 s | The time that the popup shows. |
+| **Rise Speed** | 0 | The upward speed in the world. |
+| **Max Distance** | 3000 cm | The popup hides beyond this distance from the camera. |
+| **Hide When Blocked** | true | Hides the popup while a Visibility trace from the camera hits something. |
+| **Max Active** | 4 | The most popups of the class for one player. |
+| **Stack Height** | 0 | The extra height for each popup that follows the same actor. |
+| **Viewport Z Order** | 0 | The viewport order of the popup. |
+| **Screen Alignment** | (0, 0) | The point of the popup that sits on the world point. |
 
 ## Debug
 
-These console commands exist in the editor only:
-
-| Command | Effect |
+| Tool | Effect |
 |---|---|
-| `ns.UI.Inspect` | Opens the NsUI Inspector tab. It shows the first local player: the user index, the suspended state, the recovery reason, and each screen with its layer, its state, its owner, its selection mode, and its selection. |
-| `ns.UI.SmokeTest.Toggle` | Opens or closes the smoke test screen on the `Menu` layer. Its buttons open a menu, a modal, a viewport screen, an actor selection screen, and a location selection screen, and add or remove a control. |
-
-In the actor selection screen of the smoke test, Confirm destroys the selected actor. Back closes the actor and location selection screens.
+| `ns.UI.Inspect` | Console command, not in Shipping. Logs the open widgets, the active widget, the input policy, and the pointer mode of each local player. |
+| NsUI Inspector | Editor tab (Window menu). Shows the same state for each play world. |
+| `LogNsUI` | Log category. `Verbose` shows each open, close, and active change. |
 
 ## Troubleshooting
 
 | Problem | Cause | Fix |
 |---|---|---|
-| `Open Screen` returns None | The class is None, the local player has no player controller yet, or the world is not a game world. | Open the screen after the player controller exists, for example from `NsUIHUD`. |
-| A viewport widget gets no input | The widget does not implement `NsUIScreen`, or it belongs to another local player. | Implement the interface, and create the widget for the right player. |
-| A screen shows but takes no clicks | A higher screen is active, or the screen is not interactive, not visible, or disabled. | Close the higher screen, or set **Interactive**, visibility, and **Is Enabled**. |
-| Back does not close a screen | The screen came from `Add to Viewport`, or a handler or the selection mode used Back. | Remove the widget in `Handle Ns Screen Cancel`. |
-| UI input stops after a click outside the game, Shift+F1, or a switch to another app | The subsystem suspends while the game viewport has no focus. | Click in the game viewport. |
-| A popup does not show | No player controller, the popup is beyond **Max Distance** or behind the camera, or a wall blocks it with **Hide When Blocked** on. | Move closer, or turn off **Hide When Blocked**. |
-| A popup has no text | The widget has no Text Block named `PopupText`. | Add the Text Block, or show the text in `On Popup Started`. |
-| A popup ends early | Its follow actor was destroyed, or **Max Active** popups of the class already show. | Raise **Max Active**, or use no follow actor. |
+| The UI has no keys, and the log shows an `Error` | The settings have no mapping context or input actions. | Do Setup step 5. |
+| The game loses a key while the UI is open | A UI input action consumes input. | Turn off **Consume Input** on the action. |
+| `Open Widget` returns None | The player has no player controller yet. | Open the widget from the player controller or the HUD. |
+| A widget shows but takes no input | A higher widget is active, or the widget is `Passive`. | Close the higher widget, or change the policy. |
+| Back does not close a widget | `Handle Back` returned true. | Return false when the widget must close. |
 
 ## Limits
 
-- The mouse cursor shows whenever a screen is active, also on the `Game` layer.
-- The UI cursor follows the selected target. Logical input has no UI cursor. The cursor brush is fixed in code.
-- Tab and Shift+Tab always navigate, also when Tab is not in **Navigate Next Keys**.
-- Selection recovery runs on the next tick, after the Slate event. Editor interaction, Shift+F1, and a lost app focus pause it.
-- The actor and location selection modes take their candidates from C++ only. Blueprint cannot extend `NsUISelectionMode`.
-- No device detection and no prompt icons.
-- The screen subsystem works only in game worlds.
+- The selection cursor follows the focused control only when it has a size on screen.
+- The framework does not detect an Xbox pad from a PlayStation pad. NsInput does that for the prompt icons.
+- With NsInput, the framework tells NsInput the device that the player uses in the UI. It does not read the NsInput device.
+- A widget that implements the interface without the `NsUIWidget` parent does not close when the game calls `Remove From Parent`. Call `Close Widget`.
 
-### Use the direction keys on a screen
+## Migrate from v1
 
-Implement `HandleNsScreenNavigate` of `INsUIScreen`, and return true to consume a direction. A map uses this to pan.
+| v1 | v2 |
+|---|---|
+| `INsUIScreen`, `UNsUIScreen` | `INsUIWidgetInterface`, `UNsUIWidgetInterface` |
+| `OpenScreen`, `CloseScreen`, `ToggleScreen`, `FindScreen` | `OpenWidget`, `CloseWidget`, `ToggleWidget`, `FindWidget` |
+| `GetNsScreenConfig`, `GetNsScreenSelection` | `GetConfig`, `GetFocus` |
+| `OnNsScreenOpened`, `OnNsScreenActivated`, `OnNsScreenSuspended`, `OnNsScreenClosed` | `OnOpened`, `OnActivated`, `OnDeactivated`, `OnClosed` |
+| `HandleNsScreenConfirm`, `HandleNsScreenCancel`, `HandleNsScreenNavigate` | `HandleConfirm`, `HandleBack`, `HandleNavigate` |
+| `FNsUIScreenConfig` with `bInteractive`, `Gameplay`, `bGameInputOnly` | `FNsUIWidgetConfig` with `InputPolicy` |
+| `bInteractive = false` | `InputPolicy = Passive` |
+| `Gameplay = Allow`, or the `Game` layer with `Automatic` | `InputPolicy = UIAndGame` |
+| `bGameInputOnly = true` | `InputPolicy = GameFirst` |
+| `ENsUISelectionPolicy::Logical` | `FocusPolicy = Self` |
+| `FNsUISelectionRequest` | `FNsUIFocusRequest` |
+| `UNsUIUMGSelectionMode` | No class. The focused control is the selection. |
+| `UNsUIDeveloperSettings` key lists | `UNsUISettings` with Enhanced Input actions |
+| Add to Viewport screens, found by the framework | Removed. Use `OpenWidget`, or `AddExternalWidget` for a widget that another system shows. |
+| `ns.UI.SmokeTest.Toggle` | Removed. Automation tests `NsUIFramework.*` replace it. |
 
-### A screen that only shows during play
+Work items for a game:
 
-Set `bGameInputOnly` in the screen config. The game view keeps the focus, so keys that the player holds stay held. Directions go to the game. Confirm and Cancel go to the game when the handler of the screen returns false.
+1. Rename the interface, the functions, and the config fields with the table.
+2. Replace focus polling in Tick with `On Focus Changed`.
+3. Replace `GetParent()` checks with `Is Widget Open`.
+4. Replace `SetUserFocus` after a rebuild with `Focus Child`.
+5. Remove input preprocessors that run before the UI. The framework no longer takes keys before widgets.
+6. Set the input settings (Setup step 5). A game that used extra UI keys adds them to a copy of `IMC_NsUI`.

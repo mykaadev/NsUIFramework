@@ -4,152 +4,128 @@
 
 ### Modules
 
-| Module | Type | Loading phase | Content |
-|---|---|---|---|
-| `NsUIFramework` | Runtime | Default | The screen subsystem, the screen interface, the selection modes, the Slate input router, the layout and the cursor, the HUD, the function library, the developer settings, and the world popups |
-| `NsUIFrameworkEditor` | Editor | Default | The `ns.UI.Inspect` and `ns.UI.SmokeTest.Toggle` console commands, the NsUI Inspector tab, and the smoke test widgets |
-
-The `.uplugin` has no platform allow list. The plugin has no content and no default settings in `Config/`.
-
-### Folders
-
-| Folder | Content |
-|---|---|
-| `Source/NsUIFramework/Public` | `NsUIFrameworkTypes.h`, `NsUIScreen.h`, `NsUIWidget.h`, `NsUISubsystem.h`, `NsUIHUD.h`, `NsUIFunctionLibrary.h`, `NsUIDeveloperSettings.h`, `NsUIWorldPopupSubsystem.h`, `NsUIWorldPopupWidget.h`, `NsUIFramework.h` |
-| `Source/NsUIFramework/Public/Selection` | `NsUISelectionMode.h`: the base mode and the UMG, world, actor, and location modes |
-| `Source/NsUIFramework/Private` | The implementations, and the private headers `NsUILayout.h`, `NsUILayer.h`, `NsUICursor.h`, `NsUISlateInputRouter.h` |
-| `Source/NsUIFramework/Private/Selection` | `NsUISelectionMode.cpp` |
-| `Source/NsUIFrameworkEditor/Public` | `NsUIFrameworkEditor.h`, `Smoke/NsUISmokeTestWidgets.h` |
-| `Source/NsUIFrameworkEditor/Private` | `NsUIFrameworkEditor.cpp`, `NsUISmokeTestWidgets.cpp` |
-
-### Main Classes
-
-| Type | Responsibility |
-|---|---|
-| `UNsUISubsystem` | A `ULocalPlayerSubsystem` and `FTickableGameObject`. It owns the screen stack, the presentation, the input policy, the navigation config, and selection recovery. |
-| `INsUIScreen` | The optional screen contract. Every function is a `BlueprintNativeEvent`. |
-| `UNsUIWidget` | A `UUserWidget` parent that implements `INsUIScreen`. |
-| `FNsUIScreenConfig` | `Layer`, `bInteractive`, `Gameplay`, `SelectionMode`. |
-| `FNsUISelectionRequest` | `Policy` (`Automatic` or `Logical`) and `PreferredTarget`. |
-| `ENsUILayer`, `ENsUIGameplayPolicy`, `ENsUISelectionPolicy` | The layer, gameplay, and selection enums. |
-| `UNsUISelectionMode` | The abstract base of selection. One object for each screen. |
-| `UNsUIUMGSelectionMode` | Native UMG focus and navigation. It collects focusable controls, also inside nested user widgets and list views. The default mode. |
-| `UNsUIWorldSelectionMode` | The abstract base of directional selection of world candidates through screen projection. |
-| `UNsUIActorSelectionMode`, `UNsUILocationSelectionMode` | World modes for weak actor lists and for `FNsUILocation` lists (id and position). |
-| `FNsUISlateInputRouter` | A Slate input pre-processor. It routes keys, analog input, and pointer events to the subsystem, and watches focus changes and app activation. |
-| `UNsUILayout`, `UNsUILayer` | Private. The layout holds one overlay panel for each layer. |
-| `UNsUICursor` | Private. A non-hit-testable image that follows the selection. |
-| `UNsUIDeveloperSettings` | The keys and the cursor motion (`config=Game`, `defaultconfig`). |
-| `ANsUIHUD` | A `Blueprintable` `AHUD` that opens `StartScreens` through `UNsUIFunctionLibrary::OpenScreen` on `BeginPlay`. |
-| `UNsUIFunctionLibrary` | Static Blueprint calls: `GetUISubsystem`, `OpenScreen`, `ToggleScreen`, `CloseScreen`. |
-| `UNsUIWorldPopupSubsystem` | A `ULocalPlayerSubsystem` and conditional `FTickableGameObject`. It shows, moves, and pools floating texts over world points. |
-| `UNsUIWorldPopupWidget` | The abstract `UUserWidget` parent of one popup. It holds the motion values and the optional `PopupText`. |
-| `FNsUIWorldPopupEntry` | One active popup: the widget, the follow actor, the point or offset, and the age. |
-
-### Data Flow
-
-#### Open flow
-
-1. `OpenScreen` calls `EnsurePresentation`. The first call makes the layout, wraps it in a focusable input root and a constraint canvas for the split screen area of the player, and adds it to the game viewport. It also adds the cursor widget to the viewport at Z order `MAX_int32 - 100`.
-2. `OpenScreen` makes the widget for the local player controller and adds it to the layer panel of the requested layer.
-3. `AddEntry` reads the config from `GetNsScreenConfig`. For an owned screen, the `Layer` argument replaces the config layer.
-4. `AddEntry` makes the selection mode object. A null or abstract class falls back to `UNsUIUMGSelectionMode`.
-5. `AddEntry` puts a navigation stop on each escape boundary of the screen root, so navigation stays in the screen.
-6. The subsystem calls `OnNsScreenOpened` with the context and the mode.
-7. `Reconcile` picks the active screen and calls `OnNsScreenSuspended` and `OnNsScreenActivated` as needed.
-8. `ApplyInputPolicy` sets the input mode and the cursor when the active screen changes.
-
-`Reconcile` picks the interactive, visible, and enabled screen with the highest layer. In one layer, the latest entry wins. Other interactive screens become `HitTestInvisible`. When the active screen is owned and a viewport screen is open, `Reconcile` moves the presentation over the highest viewport screen.
-
-#### Close flow
-
-`RemoveEntry` gives back the original navigation metadata and visibility, calls `OnNsScreenClosed`, removes an owned widget from its parent, and calls `Reconcile`. `CloseScreen` and `CloseAll` act on owned entries only.
-
-#### Viewport discovery
-
-The subsystem listens to `UGameViewportSubsystem::OnWidgetAdded` and `OnWidgetRemoved`. On the first tick of a world, it also searches the existing user widgets in Z order. A user widget in the same game world, for the same local player, that implements `INsUIScreen` becomes an external entry. The subsystem never removes an external widget from the viewport.
-
-#### Input policy
-
-| Active screen | Input mode | Mouse cursor |
+| Module | Type | Content |
 |---|---|---|
-| None | `FInputModeGameOnly` | Hidden |
-| Gameplay allowed | `FInputModeGameAndUI`, no lock, cursor not hidden on capture | Shown |
-| Gameplay blocked | `FInputModeUIOnly`, no lock | Shown |
+| `NsUIFramework` | Runtime | The UI subsystem, the widget stack, the Slate root, the UI input, the focus tracker, the selection modes, the selection cursor, the HUD, the function library, the settings, the world popups, `ns.UI.Inspect`, and the automation tests |
+| `NsUIFrameworkTween` | Runtime | `UNsUITweenCursorWidget`: a cursor that glides with NsTween. `WITH_NSTWEEN` is 0 without NsTween, and the cursor then moves at once |
+| `NsUIFrameworkInput` | Runtime | `UNsUIInputBridgeSubsystem`: tells NsInput the device that the player uses in the UI. `WITH_NSINPUT` is 0 without NsInput, and the module then does nothing |
+| `NsUIFrameworkEditor` | Editor | The NsUI Inspector tab |
 
-Gameplay is allowed when the policy is `Allow`, or when it is `Automatic` and the layer is `Game`. `UpdateNavigationConfig` installs a copy of the user navigation config while a screen is active. It maps the confirm and cancel keys to Accept and Back, maps the direction keys, and turns analog navigation off when gameplay is allowed.
+The plugin content has the default UI input: `Content/Input/IMC_NsUI` and one `IA_NsUI_` action for each UI action. The actions do not consume input.
 
-#### Input routing
+### Main classes
 
-The router is a Slate input pre-processor, so it sees events before widgets do. It resolves the subsystem from the Slate user index.
+| Class | Job |
+|---|---|
+| `UNsUISubsystem` | A `ULocalPlayerSubsystem` with no tick. The only writer of the open widgets, the input mode, the mouse cursor, and the UI navigation config of its player |
+| `FNsUIWidgetStack` | Private, plain C++. Holds one `FNsUIWidgetEntry` for each open widget and picks the active one: the highest layer that takes input, then the newest |
+| `SNsUIRoot` | Private Slate widget in the game viewport of the player. One `SOverlay` for each layer. Gets the keys, the directions, and the pointer events that no control used |
+| `SNsUIWidgetSlot` | Private Slate box around each open widget. Owns the hit test of the widget and keeps navigation inside it |
+| `FNsUIInputActions` | Private. Reads the keys of the UI actions from Enhanced Input and owns the Slate navigation config of the player while a widget takes input |
+| `FNsUIFocusTracker` | Private. Watches the Slate focus of the player, owns the suspended state, and runs a focus restore on the next frame |
+| `INsUIWidgetInterface` | The optional contract of a widget. Every event is a `BlueprintNativeEvent` with a default |
+| `UNsUIWidget` | Abstract `UUserWidget` parent that implements the interface. `RemoveFromParent` closes the widget through the subsystem |
+| `UNsUISelectionMode` | Abstract base of the selection of things that are not controls. `UNsUIWorldSelectionMode`, `UNsUIActorSelectionMode`, and `UNsUILocationSelectionMode` select world positions |
+| `UNsUICursorWidget` | Abstract Blueprintable selection cursor. Follows a focused control or a selection mode |
+| `UNsUISettings` | `UDeveloperSettings`, `Config=Game`, category Plugins |
+| `ANsUIHUD`, `UNsUIFunctionLibrary` | Blueprint entry points |
+| `UNsUIWorldPopupSubsystem`, `UNsUIWorldPopupWidget` | Floating texts over world points |
 
-- Confirm and Cancel keys go to `RouteAction`. The screen handler runs first, then the selection mode. Cancel then closes an owned screen. A consumed key also consumes its key up.
-- Direction keys, Tab, and Shift+Tab go to `RouteNavigate`. The UMG mode leaves them to native Slate navigation.
-- Analog input becomes a direction for world modes. The UMG mode leaves analog input to Slate.
-- Pointer moves go to `ObservePointer`, so the mouse can select. A left click on a world candidate selects it and calls `RouteAction(true)`.
-- Shift+F1, a click outside the game viewport, and app deactivation suspend the subsystem. Focus back in the game viewport resumes it.
+### Input flow
 
-#### Tick
+The framework routes UI input the Slate way: a key goes to the focused control first, and the framework acts only on what no control used.
 
-`UNsUISubsystem::Tick` runs each frame in game worlds, also while the game is paused:
+1. A key goes down. `SNsUIRoot::OnPreviewKeyDown` runs first, because the root is the top of the path. It reports the device and, for Confirm only, calls `HandleConfirm`. It skips this while a text box has the focus (keyboard keys only) or the console is open.
+2. The focused control gets the key. A text box keeps the keys that it types. A button uses Confirm through the Slate navigation config, which maps the UI keys to Accept and Back.
+3. A key that no control used bubbles to `SNsUIRoot::OnKeyDown`. Back goes to `HandleBack`, then to the selection mode, then closes the widget. The tab actions go to `HandleTab`.
+4. A key that the root does not use bubbles on to the game viewport. With `UIOnly` the player controller ignores input (`FInputModeUIOnly`), but the console still gets its keys. With `UIAndGame` the game gets the key.
+5. A direction becomes a Slate navigation event. `SNsUIWidgetSlot::OnNavigation` calls `HandleNavigate`, then the selection mode. If one uses it, the slot returns a custom reply with no target, so the focus stays. If not, the slot returns Stop, so Slate moves the focus inside the widget only.
+6. `GameFirst`: the game view keeps the focus. An Enhanced Input component on the player controller gives the Confirm and Back actions to the handlers.
 
-1. It applies a dirty input policy and runs viewport discovery once for each world.
-2. It drops entries whose widgets left their parent or the viewport.
-3. It calls `Reconcile`.
-4. For the active screen, every 0.1 s it calls `Refresh` on the mode and checks `HasSelection`.
-5. It runs `RecoverSelection` when a reason is set. Recovery happens here, never inside a Slate event.
-6. It moves the cursor toward `GetCursorPosition` of the mode.
+### Data ownership
 
-#### World popups
+Each piece of data has one owner, and only the owner writes it.
 
-1. `ShowPopup` ends the oldest popups of the class while the class has `MaxActive` popups.
-2. It takes a pooled widget of the class for the same player controller, or makes one.
-3. It adds the widget to the player screen at `ViewportZOrder`, with the alignment (0.5, 1).
-4. A popup on an actor that already has popups starts `StackHeight` higher for each of them.
-5. Each tick moves the point up by `RiseSpeed`, applies the fade and the pop scale, and projects the point to the screen.
-6. The popup hides beyond `MaxDistance` from the camera and behind the camera. With `bHideWhenBlocked`, it also hides when a `ECC_Visibility` trace from the camera hits something. The trace ignores the pawn of the player and the follow actor.
-7. At `Lifetime`, or when the follow actor goes away, the widget leaves the screen and goes back to the pool.
+| Data | Owner and writer | Rebuilt |
+|---|---|---|
+| Open widgets, their context, config, and selection mode | `FNsUIWidgetStack`, through `OpenWidget`, `AddExternalWidget`, `CloseWidget`, `FinishCloseWidget`, `RemoveExternalWidget`, `CloseAll`, `RefreshConfig`, and world cleanup | Config at open and on `RefreshConfig` |
+| Lifetime and placement of an external widget | The system that shows it. An external entry has no slot, and the framework never writes its Slate | None |
+| Active widget | `FNsUIWidgetStack` | On open, close, and `RefreshConfig` |
+| Hit test and navigation boundary | `SNsUIWidgetSlot` | When the active widget changes. The framework never writes the visibility or the navigation metadata of a widget |
+| Input mode and mouse cursor | `UNsUISubsystem::ApplyInputPolicy` | On each active change, pointer mode change, and new player controller |
+| Navigation config of the player | `FNsUIInputActions` | When Enhanced Input rebuilds its mappings |
+| Focus | Slate. The framework writes it in `ApplyFocus`, `FocusChild`, and hover | Restore on the next frame when the focus leaves the active widget |
+| Last focused control | The entry of the widget, written in `HandleFocusMoved` and `FocusChild` | None |
+| Suspended state | `FNsUIFocusTracker` | On a focus change and on app activation |
+| World candidates | The widget that calls `SetCandidates` | Screen positions are projected when needed |
+| Cursor position | `UNsUICursorWidget` | Each frame while it shows, from the target geometry |
+| Popups and pool | `UNsUIWorldPopupSubsystem` | Each frame while a popup shows |
+
+The root and the focus tracker call the subsystem only through delegates that the subsystem binds to its private functions. No class is a `friend` of another.
 
 ## Lifetime
 
-- `FNsUIFrameworkModule::StartupModule` registers the input router when Slate exists, and again on `OnPostEngineInit`. `ShutdownModule` removes it.
-- `UNsUISubsystem::Initialize` binds the viewport and world cleanup delegates. `Deinitialize` removes every entry (and owned widgets), the presentation, and the cursor.
-- An entry holds strong references to its widget, its context, and its selection mode until `RemoveEntry`. A mode stays alive while its screen is suspended.
-- On world cleanup, the subsystem removes the entries, the layout, and the cursor of that world. It marks the input policy as dirty, so the next tick sets the input mode for the new player controller, also when no screen is active.
-- `ANsUIHUD::BeginPlay` opens the start screens for a local player controller. The screens close on world cleanup.
-- On world cleanup, the world popup subsystem ends its popups and drops pooled widgets of that world. `Deinitialize` clears all popups and the pool.
-- `FNsUIFrameworkEditorModule` registers the two console commands and the inspector tab spawner on startup, and removes them on shutdown.
+- `UNsUISubsystem::Initialize` makes the stack, the input actions, and the focus tracker, and binds the world cleanup and the Enhanced Input mapping rebuild.
+- `PlayerControllerChanged` adds the UI mapping context to the player and applies the input policy.
+- The first `OpenWidget` makes the root and adds it to the viewport of the player. It also makes the selection cursor when the settings name one.
+- `AddExternalWidget` adds an entry with no slot, for a widget that another system shows. Only `GameFirst` and `Passive` are allowed, because the framework cannot give focus to a widget outside its root. `RemoveExternalWidget` removes the entry.
+- `CloseWidget` asks `BeginClose`. A widget in its outro stays in the stack, gets no input, and leaves on `FinishCloseWidget`.
+- World cleanup removes the widgets of that world and the cursor. When no widget is left, it removes the root, because a map change removes all viewport widgets.
+- `Deinitialize` calls `OnClosed` on every widget, removes the root and the cursor, and gives back the navigation config.
+- Pause: the subsystem has no tick, so pause changes nothing. Input still works while the game is paused. World popups pause with the game.
+- Console: the engine moves the focus to the game viewport while the console is open. The framework does not restore the focus during that time.
 
 ## Extension Points
 
 | Point | Use |
 |---|---|
-| `INsUIScreen` | Implement it on any widget, in C++ or Blueprint. In C++, override `GetNsScreenConfig_Implementation`, `GetNsScreenSelection_Implementation`, `OnNsScreenOpened_Implementation(UObject* Context, UNsUISelectionMode* SelectionMode)`, `OnNsScreenActivated_Implementation(bool bResumed)`, `OnNsScreenSuspended_Implementation`, `OnNsScreenClosed_Implementation`, `HandleNsScreenConfirm_Implementation`, `HandleNsScreenCancel_Implementation`. |
-| `UNsUISelectionMode` | C++ only (`Abstract`, `NotBlueprintable`). Override the pure virtuals `Restore(UWidget*)`, `HasSelection()`, and `GetCursorPosition(FVector2D&)`. Optional virtuals: `Initialize`, `Refresh`, `Navigate(EUINavigation)`, `UsesNativeNavigation`, `ObservePointer`, `Confirm`, `Cancel`, `GetFocusTarget`, `ObserveFocus`, `DescribeSelection`. |
-| `UNsUIWorldSelectionMode` | Override `GetCandidateCount()` and `GetCandidatePosition(int32 Index, FVector& Position)` for a new world candidate source. |
-| `ANsUIHUD` | Subclass in Blueprint or C++. `BeginPlay` is virtual. |
-| `UNsUIWorldPopupWidget` | Subclass in Blueprint. Implement the `BlueprintImplementableEvent` `OnPopupStarted(const FText& Text, FLinearColor Color)`. |
-| `UNsUIDeveloperSettings` | The keys and the cursor motion, in `DefaultGame.ini`. |
+| `INsUIWidgetInterface` | Implement it on any widget, in C++ or Blueprint |
+| `UNsUISelectionMode` | Subclass in C++ for a new kind of selection. Override `Navigate`, `PickAt`, `Confirm`, `Cancel`, `GetSelectionPosition`, and `Activate` |
+| `UNsUIWorldSelectionMode` | Override `GetCandidateCount` and `GetCandidatePosition` for a new world candidate source |
+| `UNsUICursorWidget` | Make a Blueprint child for the art. Implement `OnCursorMoved` to animate in Blueprint, or override `MoveCursor` in C++ |
+| `UNsUIWorldPopupWidget` | Make a Blueprint child. Implement `OnPopupStarted` |
+| `ANsUIHUD` | Subclass in Blueprint or C++ |
+| `UNsUISubsystem::OnDeviceUsed` | A native event for device integrations, such as the NsInput module |
 
 ## Dependencies
 
 | Dependency | Kind | Why |
 |---|---|---|
-| Core, UMG, DeveloperSettings | Public, `NsUIFramework` | Public headers use UMG widgets and `UDeveloperSettings` |
-| CoreUObject, Engine, Slate, SlateCore, InputCore | Private, `NsUIFramework` | Subsystems, player controllers, the input pre-processor, keys |
-| Core, NsUIFramework, UMG | Public, `NsUIFrameworkEditor` | The smoke test widgets implement `INsUIScreen` |
-| CoreUObject, Engine, Slate, SlateCore, InputCore | Private, `NsUIFrameworkEditor` | Console commands, the inspector tab, spawned target points |
-
-The `.uplugin` lists no plugin dependencies.
+| Core, CoreUObject, Engine, InputCore, SlateCore, UMG, DeveloperSettings, EnhancedInput | Public, `NsUIFramework` | Public headers use UObjects, local player subsystems, keys, Slate enums, UMG widgets, settings, and input actions |
+| Slate | Private, `NsUIFramework` | The root widget, the focus, and the navigation config |
+| EnhancedInput | Required engine plugin | The UI keys |
+| NsTween | Optional studio plugin | `NsUIFrameworkTween` |
+| NsInput | Optional studio plugin | `NsUIFrameworkInput` |
 
 ## Performance
 
-- `UNsUISubsystem` ticks each frame in game worlds. Each tick calls `Reconcile`, which walks the screen list.
-- The active mode gets `Refresh` every 0.1 s. The UMG mode then walks the whole widget tree of the screen.
-- World modes project candidates on navigation, on each pointer move, every 0.1 s for `HasSelection`, and each frame for the cursor.
-- The world popup subsystem ticks only while a popup shows. Each popup does one projection each frame and, with `bHideWhenBlocked`, one line trace.
-- Popup widgets go back to a pool, for each class and player controller.
+- `UNsUISubsystem` does not tick. Work happens on input, focus change, open, and close.
+- A focus change walks the Slate parents of the focused widget and the UMG tree of its user widget once.
+- A mouse move over the UI finds the control under the pointer once, for hover focus.
+- World selection projects the candidates on a direction, a pointer move, and each frame of the cursor.
+- The selection cursor ticks only while it shows.
+- Each world popup does one projection and, with `bHideWhenBlocked`, one line trace each frame. The popup subsystem ticks only while a popup shows. Popup widgets go back to a pool.
 
 ## Networking
 
-The plugin does not replicate. Each local player has its own subsystems.
+The plugin does not replicate. Each local player has its own subsystems, and each machine shows its own UI.
+
+## Testing
+
+Automation tests, in `Private/Tests/`, run in the editor:
+
+| Test | Checks |
+|---|---|
+| `NsUIFramework.Stack.Order` | Layer order, newest first in a layer, the earlier active widget |
+| `NsUIFramework.Stack.PassiveAndClosing` | Passive widgets and widgets in their outro get no input |
+| `NsUIFramework.Root.TextBoxKeepsKeys` | Backspace and E stay in a focused text box. A gamepad Confirm still reaches the handler |
+| `NsUIFramework.Root.ConfirmAndBack` | Back bubbles to the root. The Confirm handler runs before the button, and a used Confirm never clicks the button |
+| `NsUIFramework.Root.NavigateHandler` | A direction that the handler uses does not move the focus |
+
+Run them with `Automation RunTests NsUIFramework`. The console rule, the input policies, and the Enhanced Input keys need a game world: check them with a play test.
+
+## Change Rules
+
+- Keep the names of `INsUIWidgetInterface` events and of the `UNsUISubsystem` Blueprint functions stable. Games and Blueprints call them by name.
+- Keep the UI input actions without Consume Input.
+- Keep the subsystem the only writer of the input mode and the mouse cursor.
