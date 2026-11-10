@@ -31,6 +31,7 @@ void SNsUIRoot::Construct(const FArguments& Args)
     OnNavigate = Args._OnNavigate;
     OnPointer = Args._OnPointer;
     OnDevice = Args._OnDevice;
+    bTakesFocus = false;
 
     TSharedRef<SOverlay> LayerStack = SNew(SOverlay);
     for (int32 Index = 0; Index <= static_cast<int32>(ENsUILayer::Modal); ++Index)

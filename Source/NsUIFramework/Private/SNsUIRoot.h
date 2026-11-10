@@ -68,7 +68,7 @@ public:
     void Construct(const FArguments& Args);
 
     //~ Begin SWidget Interface
-    virtual bool SupportsKeyboardFocus() const override { return true; }
+    virtual bool SupportsKeyboardFocus() const override { return bTakesFocus; }
     virtual FReply OnPreviewKeyDown(const FGeometry& MyGeometry, const FKeyEvent& KeyEvent) override;
     virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& KeyEvent) override;
     virtual FNavigationReply OnNavigation(const FGeometry& MyGeometry, const FNavigationEvent& NavigationEvent) override;
@@ -88,6 +88,9 @@ public:
 
     /** Sets whether the root itself takes the pointer. True for world selection, so clicks on empty space reach the mode */
     void SetCatchesPointer(bool bCatches);
+
+    /** Sets whether the root itself can have the focus. True only for a widget that keeps the focus on itself, so a click on empty space never moves the focus to the root */
+    void SetTakesFocus(bool bInTakesFocus) { bTakesFocus = bInTakesFocus; }
 
     /** Returns true while the viewport console of the player is open */
     bool IsConsoleOpen() const;
@@ -117,4 +120,7 @@ private:
 
     /** Gets the kind of device that the player used */
     FNsUIReportDevice OnDevice;
+
+    /** True while the root itself can have the focus */
+    bool bTakesFocus;
 };

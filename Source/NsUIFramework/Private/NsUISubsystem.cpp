@@ -447,6 +447,7 @@ void UNsUISubsystem::UpdateActive(const bool bForce)
     if (Root.IsValid())
     {
         Root->SetCatchesPointer(bTakesUIInput && Active->Mode != nullptr);
+        Root->SetTakesFocus(bTakesUIInput && (Active->Mode != nullptr || Active->Config.FocusPolicy == ENsUIFocusPolicy::Self));
     }
     UpdateGameFirstInput(Policy == ENsUIInputPolicy::GameFirst);
     ApplyInputPolicy();
@@ -591,6 +592,10 @@ void UNsUISubsystem::ApplyFocus()
         Target = FindFirstFocusable(Active->Slot.ToSharedRef());
     }
     // A widget with no control keeps the focus on the root, so its keys still reach the handlers
+    if (!Target.IsValid())
+    {
+        Root->SetTakesFocus(true);
+    }
     Slate.SetUserFocus(UserIndex, Target.IsValid() ? Target : StaticCastSharedPtr<SWidget>(Root), EFocusCause::SetDirectly);
 }
 
